@@ -3,8 +3,7 @@
 out
 .DS_Store
 *.log
-.env*
+.env
 .env.local
-.env.*.local
 coverage
 /.github

@@ -11,7 +11,7 @@ import { formatCurrencyCOP } from "@/lib/utils";
 const amountOptions = [
   { value: 20000, description: "Alimento y arena para un peludo" },
   { value: 50000, description: "Medicamentos y esterilización" },
-  { value: 100000, description: "Rescate y hogar temporal" },
+  { value: 100000, description: "Rescate y atención médica" },
 ];
 
 interface DonorFormStepProps {
@@ -79,7 +79,7 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
           <div className="flex items-center gap-2 text-sm text-slate-500">
             <span>🐶</span>
             <span>🐱</span>
-            <span>+120 peludos atendidos cada mes</span>
+            <span>Peludos atendidos cada mes</span>
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -147,15 +147,7 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
             onChange={(event) => handleFieldChange("city", event.target.value)}
             error={errors.city}
           />
-          <label className="flex items-start gap-3 rounded-3xl bg-foundation-green/5 p-4 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={values.wantsUpdates}
-              onChange={(event) => handleFieldChange("wantsUpdates", event.target.checked)}
-              className="mt-1 h-5 w-5 rounded border-foundation-green text-foundation-green focus:ring-foundation-green"
-            />
-            <span>Quiero recibir historias y actualizaciones de los peludos.</span>
-          </label>
+          {/* Removed: opt-in for receiving updates */}
         </div>
       </div>
 
@@ -205,7 +197,7 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
       <div className="flex flex-col gap-3 rounded-4xl bg-white/90 p-6 text-sm text-slate-600 shadow-card">
         <p>
           Esta es una donación <span className="font-semibold text-foundation-blue">mensual</span>. Puedes cancelarla cuando
-          quieras escribiendo a <span className="font-semibold">contacto@hablemosporellos.org</span>.
+          quieras contactando a <span className="font-semibold">la fundación Hablemos por ellos</span>.
         </p>
         <p>
           Al continuar, crearemos un borrador de tu suscripción y te guiaremos al pago seguro con Wompi.

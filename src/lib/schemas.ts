@@ -11,7 +11,7 @@ export const donorFormSchema = z.object({
   documentType: z.enum(["CC", "CE", "PA", "NIT"]),
   documentNumber: z.string().min(5, "Documento demasiado corto"),
   city: z.string().min(2, "Ciudad inválida"),
-  wantsUpdates: z.boolean().default(true),
+  wantsUpdates: z.boolean().default(false),
   amount: z
     .number({ invalid_type_error: "Selecciona un monto" })
     .min(10000, "El monto mínimo es $10.000"),

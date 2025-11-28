@@ -9,7 +9,7 @@ export function HeroCard() {
         </p>
         <ul className="mt-2 grid gap-2 text-sm text-slate-600 md:grid-cols-2">
           <li className="flex items-center gap-2"><span>❤️</span>Más de 120 peludos alimentados cada mes.</li>
-          <li className="flex items-center gap-2"><span>🩺</span>Clínicas veterinarias aliadas 24/7.</li>
+          <li className="flex items-center gap-2"><span>🩺</span>Clínicas veterinarias aliadas.</li>
           <li className="flex items-center gap-2"><span>🚑</span>Brigadas de rescate urbano y rural.</li>
           <li className="flex items-center gap-2"><span>🏡</span>Programas de adopción responsable.</li>
         </ul>

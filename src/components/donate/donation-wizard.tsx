@@ -18,7 +18,7 @@ const INITIAL_DONOR: DonorFormValues = {
   documentType: "CC",
   documentNumber: "",
   city: "",
-  wantsUpdates: true,
+  wantsUpdates: false,
   amount: 50000,
 };
 
