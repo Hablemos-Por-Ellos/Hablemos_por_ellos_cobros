@@ -14,7 +14,7 @@ export const donorFormSchema = z.object({
   wantsUpdates: z.boolean().default(false),
   amount: z
     .number({ invalid_type_error: "Selecciona un monto" })
-    .min(10000, "El monto mínimo es $10.000"),
+    .positive("El monto debe ser mayor a 0"),
 });
 
 export type DonorFormValues = z.infer<typeof donorFormSchema>;
@@ -30,7 +30,7 @@ export type PaymentAuthorization = z.infer<typeof paymentAuthorizationSchema>;
 export const subscriptionPayloadSchema = z.object({
   stage: z.enum(["draft", "confirm"]),
   donor: donorFormSchema.omit({ amount: true }),
-  amount: z.number().min(10000),
+  amount: z.number().positive("El monto debe ser mayor a 0"),
   paymentMethod: z.enum(["card", "nequi"]).optional(),
   wompi: z
     .object({

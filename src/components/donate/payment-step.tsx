@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { DonorFormValues } from "@/lib/schemas";
 import { formatCurrencyCOP } from "@/lib/utils";
@@ -27,8 +27,47 @@ interface PaymentStepProps {
   paymentMethod: "card" | "nequi";
   onMethodChange: (method: "card" | "nequi") => void;
   onBack: () => void;
-  onAuthorized: () => Promise<void> | void;
+  onAuthorized: (wompiData?: { token: string; maskedDetails: string }) => Promise<void> | void;
   loading?: boolean;
+}
+
+// Declare Wompi global type
+declare global {
+  interface Window {
+    Wompi?: {
+      init: (config: WompiConfig) => void;
+      render: (containerId: string) => void;
+    };
+  }
+}
+
+interface WompiConfig {
+  publicKey: string;
+  amountInCents: number;
+  currency: string;
+  customerData: {
+    email: string;
+    fullName: string;
+    phoneNumber: string;
+    documentType: string;
+    documentNumber: string;
+  };
+  paymentMethods: string[];
+  redirectUrl: string;
+  onPaymentSuccess: (response: WompiResponse) => void;
+  onPaymentError: (error: WompiError) => void;
+}
+
+interface WompiResponse {
+  token: string;
+  paymentSourceId: string;
+  maskedDetails: string;
+  transactionId?: string;
+}
+
+interface WompiError {
+  message: string;
+  code?: string;
 }
 
 export function PaymentStep({
@@ -40,13 +79,89 @@ export function PaymentStep({
   onAuthorized,
   loading,
 }: PaymentStepProps) {
-  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [isWidgetLoaded, setIsWidgetLoaded] = useState(false);
+  const [wompiError, setWompiError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleAuthorize = async () => {
-    setInfoMessage("Estamos conectando con Wompi...");
-    await onAuthorized();
-    setInfoMessage(null);
-  };
+  // Load Wompi script
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    // Check if already loaded
+    if (window.Wompi) {
+      setIsWidgetLoaded(true);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://checkout.wompi.co/widget.js";
+    script.async = true;
+
+    script.onload = () => {
+      setIsWidgetLoaded(true);
+      setWompiError(null);
+    };
+
+    script.onerror = () => {
+      setWompiError("No se pudo cargar el widget de Wompi. Por favor, recarga la página.");
+      setIsWidgetLoaded(false);
+    };
+
+    document.head.appendChild(script);
+
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
+  }, []);
+
+  // Initialize Wompi widget when ready
+  useEffect(() => {
+    if (!isWidgetLoaded || !window.Wompi) return;
+
+    try {
+      window.Wompi.init({
+        publicKey: process.env.NEXT_PUBLIC_WOMPI_PUBLIC_KEY || "",
+        amountInCents: amount * 100, // Convert to cents
+        currency: "COP",
+        customerData: {
+          email: donor.email,
+          fullName: `${donor.firstName} ${donor.lastName}`,
+          phoneNumber: donor.phone,
+          documentType: donor.documentType,
+          documentNumber: donor.documentNumber,
+        },
+        paymentMethods: [paymentMethod.toUpperCase()],
+        redirectUrl:
+          typeof window !== "undefined"
+            ? `${window.location.origin}/donar/confirmacion`
+            : "https://hablemosporellos.org/donar/confirmacion",
+        onPaymentSuccess: async (response: WompiResponse) => {
+          setIsProcessing(true);
+          try {
+            await onAuthorized({
+              token: response.token,
+              maskedDetails: response.maskedDetails,
+            });
+          } catch (error) {
+            setWompiError("Error al procesar el pago. Por favor, intenta de nuevo.");
+            setIsProcessing(false);
+          }
+        },
+        onPaymentError: (error: WompiError) => {
+          setWompiError(`Error en el pago: ${error.message}`);
+          setIsProcessing(false);
+        },
+      });
+
+      // Render widget
+      window.Wompi.render("wompi-widget-container");
+    } catch (error) {
+      setWompiError("Error al inicializar el widget de Wompi.");
+      console.error("Wompi init error:", error);
+    }
+  }, [isWidgetLoaded, paymentMethod, amount, donor, onAuthorized]);
 
   return (
     <section className="grid gap-6">
@@ -92,38 +207,50 @@ export function PaymentStep({
           ))}
         </div>
 
-        <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50/80 p-6 text-center">
-          <p className="text-sm font-semibold uppercase tracking-widest text-slate-500">Espacio reservado para Wompi</p>
-          <p className="mt-2 text-lg font-semibold text-slate-900">Aquí aparecerá el widget oficial de Wompi</p>
-          <p className="mt-1 text-sm text-slate-500">
-            Se cargará automáticamente al integrar el script <code>checkout.wompi.co/widget.js</code> y enviarás los datos del donante.
-          </p>
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm text-slate-600">
-            <span>🔐</span>
-            El pago se procesa de manera segura a través de Wompi
-          </div>
-          <div className="mt-6 grid gap-3 text-left text-sm text-slate-600 md:grid-cols-2">
-            <div className="rounded-2xl bg-white/90 p-4">
-              <p className="font-semibold text-slate-800">Tarjeta</p>
-              <p>Ingresa número, fecha y CVV directamente en el componente de Wompi.</p>
+        {/* Wompi Widget Container */}
+        <div className="rounded-3xl border border-slate-200 bg-white p-6">
+          {wompiError ? (
+            <div className="flex flex-col items-center gap-3 rounded-2xl bg-red-50 p-6 text-center">
+              <span className="text-4xl">⚠️</span>
+              <p className="font-semibold text-red-900">{wompiError}</p>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="text-sm font-semibold text-red-700 underline hover:text-red-900"
+              >
+                Recargar página
+              </button>
             </div>
-            <div className="rounded-2xl bg-white/90 p-4">
-              <p className="font-semibold text-slate-800">Nequi</p>
-              <p>Autoriza desde tu celular con un código temporal.</p>
+          ) : isWidgetLoaded ? (
+            <div className="space-y-4">
+              <div id="wompi-widget-container" className="w-full">
+                {/* Wompi widget renders here */}
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-green-50 px-4 py-2 text-sm text-green-700">
+                <span>🔐</span>
+                Tu pago es seguro y encriptado con Wompi
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex flex-col items-center gap-3 py-8">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-foundation-blue"></div>
+              <p className="text-sm text-slate-600">Cargando widget de pago...</p>
+            </div>
+          )}
         </div>
 
         <SecurityNote />
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" variant="ghost" onClick={onBack}>
+          <Button type="button" variant="ghost" onClick={onBack} disabled={isProcessing || !isWidgetLoaded}>
             Volver al paso anterior
           </Button>
-          <Button type="button" onClick={handleAuthorize} loading={loading}>
-            Autorizar donación mensual
-          </Button>
-          {infoMessage && <span className="text-sm text-slate-500">{infoMessage}</span>}
+          {!isWidgetLoaded && (
+            <span className="text-sm text-slate-500">Cargando widget...</span>
+          )}
+          {isProcessing && (
+            <span className="text-sm text-slate-500">Procesando pago...</span>
+          )}
         </div>
       </div>
     </section>

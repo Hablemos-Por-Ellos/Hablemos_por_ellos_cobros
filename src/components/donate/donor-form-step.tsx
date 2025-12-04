@@ -186,7 +186,7 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
             name="customAmount"
             inputMode="numeric"
             className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-base text-slate-900 focus:border-foundation-blue focus:outline-none"
-            placeholder="Ingresa un valor mínimo de $10.000"
+            placeholder="Ingresa el monto que quieras donar"
             value={customAmount}
             onChange={(event) => handleCustomAmount(event.target.value)}
           />

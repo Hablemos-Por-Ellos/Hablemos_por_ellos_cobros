@@ -80,15 +80,15 @@ export function DonationWizard() {
     }
   };
 
-  const handlePaymentAuthorized = async () => {
+  const handlePaymentAuthorized = async (wompiData?: { token: string; maskedDetails: string }) => {
     try {
       setIsLoading(true);
-      await sleep(800);
-      const simulated = simulateWompiAuthorization(paymentMethod);
+      // Use real Wompi data if provided, otherwise fall back to simulation for demo mode
+      const paymentData = wompiData || simulateWompiAuthorization(paymentMethod);
       const result = await persistDonation("confirm", undefined, {
-        wompi: { token: simulated.token, maskedDetails: simulated.maskedDetails },
+        wompi: { token: paymentData.token, maskedDetails: paymentData.maskedDetails },
       });
-      setPaymentSummary(simulated.maskedDetails);
+      setPaymentSummary(paymentData.maskedDetails);
       setConfirmationStatus(result?.status === "subscription_created" ? "confirmed" : "pending");
       setStep(3);
       setToast({ message: "¡Suscripción creada!", type: "success" });
