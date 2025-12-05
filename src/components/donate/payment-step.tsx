@@ -25,6 +25,7 @@ const methodOptions = [
 interface PaymentStepProps {
   donor: DonorFormValues;
   amount: number;
+  isRecurring: boolean;
   paymentMethod: "card" | "nequi";
   onMethodChange: (method: "card" | "nequi") => void;
   onBack: () => void;
@@ -88,6 +89,7 @@ function generateReference(): string {
 export function PaymentStep({
   donor,
   amount,
+  isRecurring,
   paymentMethod,
   onMethodChange,
   onBack,
@@ -308,7 +310,7 @@ export function PaymentStep({
             <p className="text-sm text-slate-500">{donor.email} · {donor.phone}</p>
           </div>
           <div className="ml-auto text-right">
-            <p className="text-sm text-slate-500">Donación mensual</p>
+            <p className="text-sm text-slate-500">{isRecurring ? "Donación mensual" : "Donación única"}</p>
             <p className="text-2xl font-semibold text-foundation-blue">{formatCurrencyCOP(amount)}</p>
           </div>
         </div>

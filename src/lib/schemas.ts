@@ -12,6 +12,7 @@ export const donorFormSchema = z.object({
   documentNumber: z.string().min(5, "Documento demasiado corto"),
   city: z.string().min(2, "Ciudad inválida"),
   wantsUpdates: z.boolean().default(false),
+  isRecurring: z.boolean().default(true),
   amount: z
     .number({ invalid_type_error: "Selecciona un monto" })
     .min(1500, "El monto mínimo es 1.500 COP"),
@@ -32,6 +33,7 @@ export const subscriptionPayloadSchema = z.object({
   donor: donorFormSchema.omit({ amount: true }),
   amount: z.number().positive("El monto debe ser mayor a 0"),
   paymentMethod: z.enum(["card", "nequi"]).optional(),
+  isRecurring: z.boolean().optional(),
   wompi: z
     .object({
       token: z.string().optional(),

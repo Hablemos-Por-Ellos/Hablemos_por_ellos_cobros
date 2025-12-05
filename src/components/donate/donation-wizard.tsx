@@ -19,6 +19,7 @@ const INITIAL_DONOR: DonorFormValues = {
   documentNumber: "",
   city: "",
   wantsUpdates: false,
+  isRecurring: true,
   amount: 50000,
 };
 
@@ -116,6 +117,7 @@ export function DonationWizard() {
         <PaymentStep
           donor={donor}
           amount={donor.amount}
+          isRecurring={donor.isRecurring}
           paymentMethod={paymentMethod}
           onMethodChange={setPaymentMethod}
           onBack={() => setStep(1)}
@@ -128,6 +130,7 @@ export function DonationWizard() {
         <ConfirmationStep
           donor={donor}
           amount={donor.amount}
+          isRecurring={donor.isRecurring}
           status={confirmationStatus}
           paymentSummary={paymentSummary}
           onGoHome={resetFlow}

@@ -147,12 +147,28 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
       <div className="grid gap-4 rounded-4xl bg-white/95 p-6 shadow-card">
         <div className="flex flex-wrap items-center gap-4">
           <div>
-            <p className="text-sm font-semibold text-foundation-green">Tu donación mensual</p>
+            <p className="text-sm font-semibold text-foundation-green">Tu donación</p>
             <h2 className="text-2xl font-semibold text-slate-900">{formatCurrencyCOP(values.amount)} COP</h2>
           </div>
           <div className="ml-auto flex items-center gap-3 text-sm text-slate-500">
             <span className="text-base">🩺</span>
             Tu aporte se transforma en alimento, rescates y atención veterinaria.
+          </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <input
+            id="isRecurring"
+            name="isRecurring"
+            type="checkbox"
+            className="h-5 w-5 rounded border-slate-300 text-foundation-blue focus:ring-foundation-blue"
+            checked={values.isRecurring}
+            onChange={(event) => handleFieldChange("isRecurring", event.target.checked)}
+          />
+          <div className="leading-snug">
+            <label htmlFor="isRecurring" className="font-semibold text-slate-800">
+              Activar cobro mensual automático
+            </label>
+            <p className="text-sm text-slate-500">Desmarca si solo quieres un cobro único.</p>
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
@@ -196,7 +212,7 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
           Al continuar, crearemos un borrador de tu suscripción y te guiaremos al pago seguro con Wompi.
         </p>
         <Button type="submit" loading={loading} className="mt-2 self-start">
-          Continuar con mi donación mensual
+          {values.isRecurring ? "Continuar con mi donación mensual" : "Continuar con mi donación única"}
         </Button>
       </div>
     </form>

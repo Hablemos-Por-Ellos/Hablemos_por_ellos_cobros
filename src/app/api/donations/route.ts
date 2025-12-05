@@ -11,6 +11,7 @@ export async function POST(request: Request) {
   }
 
   const { stage, donor, amount, paymentMethod, wompi } = parsed.data;
+  const isRecurring = donor.isRecurring ?? true;
   const supabase = getServiceSupabaseClient();
 
   if (!supabase) {
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
   }
 
   if (stage === "draft") {
-    return NextResponse.json({ status: "draft_saved", donorId: donorRecord.id });
+    return NextResponse.json({ status: "draft_saved", donorId: donorRecord.id, isRecurring });
   }
 
   const reference =
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
       donor_id: donorRecord.id,
       amount,
       currency: "COP",
-      frequency: "monthly",
+      frequency: isRecurring ? "monthly" : "one_time",
       status: "active",
       payment_method_type: paymentMethod,
       wompi_payment_source_id: wompi?.token ?? null,
