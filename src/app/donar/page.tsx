@@ -11,7 +11,7 @@ export default function DonarPage() {
       <HeroCard />
       <DonationWizard />
       <footer className="flex flex-col items-center gap-2 rounded-4xl bg-white/80 p-6 text-center text-sm text-slate-500">
-        <p>Mini-app diseñada para integrarse en el sitio Wix de la fundación.</p>
+        <p>Pasarela de pagos directa con la fundación.</p>
         <p>¿Preguntas? Escríbenos a contacto@hablemosporellos.org</p>
       </footer>
     </main>

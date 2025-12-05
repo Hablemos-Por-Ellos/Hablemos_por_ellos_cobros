@@ -14,7 +14,7 @@ export const donorFormSchema = z.object({
   wantsUpdates: z.boolean().default(false),
   amount: z
     .number({ invalid_type_error: "Selecciona un monto" })
-    .positive("El monto debe ser mayor a 0"),
+    .min(1500, "El monto mínimo es 1.500 COP"),
 });
 
 export type DonorFormValues = z.infer<typeof donorFormSchema>;

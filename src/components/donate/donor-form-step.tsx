@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { donorFormSchema, type DonorFormValues } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
 import { TextInput } from "@/components/ui/input";
@@ -9,9 +9,12 @@ import { AmountChip } from "@/components/ui/amount-chip";
 import { formatCurrencyCOP } from "@/lib/utils";
 
 const amountOptions = [
-  { value: 20000, description: "Alimento y arena para un peludo" },
-  { value: 50000, description: "Medicamentos y esterilización" },
-  { value: 100000, description: "Rescate y atención médica" },
+  { value: 2500, description: "" },
+  { value: 5000, description: "" },
+  { value: 10000, description: "" },
+  { value: 20000, description: "" },
+  { value: 50000, description: "" },
+  { value: 100000, description: "" },
 ];
 
 interface DonorFormStepProps {
@@ -26,16 +29,6 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
   const [customAmount, setCustomAmount] = useState(
     amountOptions.some((option) => option.value === values.amount) ? "" : values.amount.toString()
   );
-
-  const impactCopy = useMemo(() => {
-    if (values.amount >= 100000) {
-      return "Garantizas rescate, tratamientos y hogar temporal";
-    }
-    if (values.amount >= 50000) {
-      return "Cubres medicamentos y citas veterinarias";
-    }
-    return "Aseguras alimento balanceado cada semana";
-  }, [values.amount]);
 
   const handleFieldChange = (field: keyof DonorFormValues, value: string | number | boolean) => {
     setErrors((prev) => ({ ...prev, [field]: "" }));
@@ -156,7 +149,6 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
           <div>
             <p className="text-sm font-semibold text-foundation-green">Tu donación mensual</p>
             <h2 className="text-2xl font-semibold text-slate-900">{formatCurrencyCOP(values.amount)} COP</h2>
-            <p className="text-sm text-slate-500">{impactCopy}</p>
           </div>
           <div className="ml-auto flex items-center gap-3 text-sm text-slate-500">
             <span className="text-base">🩺</span>
@@ -190,6 +182,7 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
             value={customAmount}
             onChange={(event) => handleCustomAmount(event.target.value)}
           />
+          <p className="text-xs text-slate-500">Monto mínimo 1.500 COP.</p>
           {errors.amount && <span className="text-xs text-foundation-warm">{errors.amount}</span>}
         </div>
       </div>
