@@ -1,6 +1,7 @@
 # Mini-app Donaciones Mensuales · Fundación Hablemos por Ellos
 
 Mini-aplicación web moderna, emocional y confiable para gestionar suscripciones de donación mensual. Está pensada para incrustarse en un sitio principal (por ejemplo Wix) como módulo independiente que guía al donante desde la captura de datos hasta la autorización segura con Wompi y persiste la suscripción en Supabase.
+Debe ser completamente funcional y gratis el flujo final.
 
 ## Características principales
 

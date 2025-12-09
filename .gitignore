@@ -7,3 +7,6 @@ out
 .env.local
 coverage
 /.github
+TODO_PROD.md
+PASOS_A_SEGUIR_*.md
+PASOS_A_SEGUIR_LEGACY.md
