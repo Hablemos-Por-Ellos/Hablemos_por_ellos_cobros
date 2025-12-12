@@ -50,9 +50,10 @@ export async function POST(request: Request) {
   }
 
   const reference =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
+    wompi?.reference ??
+    (typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
   const { data: subscription, error: subscriptionError } = await supabase
     .from("subscriptions")
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
       frequency: isRecurring ? "monthly" : "one_time",
       status: "active",
       payment_method_type: paymentMethod,
-      wompi_payment_source_id: wompi?.token ?? null,
+      wompi_payment_source_id: wompi?.paymentSourceId ?? wompi?.token ?? null,
       wompi_masked_details: wompi?.maskedDetails ?? null,
       reference,
     })
@@ -72,6 +73,23 @@ export async function POST(request: Request) {
 
   if (subscriptionError) {
     return NextResponse.json({ message: subscriptionError.message }, { status: 500 });
+  }
+
+  // Crear registro inicial en payments cuando se confirma la donación
+  const wompiTransactionId = wompi?.token ?? wompi?.paymentSourceId ?? null;
+  if (wompiTransactionId) {
+    const { error: paymentError } = await supabase.from("payments").insert({
+      subscription_id: subscription.id,
+      amount,
+      currency: "COP",
+      status: "approved", // El widget solo llama onAuthorized si el pago fue aprobado
+      wompi_transaction_id: wompiTransactionId,
+    });
+
+    if (paymentError) {
+      // Log pero no bloquear - la suscripción ya se creó
+      console.error("Error creando payment:", paymentError.message);
+    }
   }
 
   return NextResponse.json({ status: "subscription_created", subscriptionId: subscription.id });

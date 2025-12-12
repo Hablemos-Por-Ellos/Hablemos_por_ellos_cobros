@@ -36,7 +36,9 @@ export const subscriptionPayloadSchema = z.object({
   isRecurring: z.boolean().optional(),
   wompi: z
     .object({
-      token: z.string().optional(),
+      token: z.string().optional(), // payment source id/token
+      paymentSourceId: z.string().optional(),
+      reference: z.string().optional(),
       maskedDetails: z.string().optional(),
     })
     .optional(),

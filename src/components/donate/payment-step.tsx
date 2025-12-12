@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import type { DonorFormValues } from "@/lib/schemas";
 import { formatCurrencyCOP } from "@/lib/utils";
-import { getWompiPublicKey, isProduction } from "@/lib/wompi";
+import { cleanupWompiOverlayDom, getWompiPublicKey, isProduction } from "@/lib/wompi";
 import { SecurityNote } from "./security-note";
 
 const methodOptions = [
@@ -29,7 +29,7 @@ interface PaymentStepProps {
   paymentMethod: "card" | "nequi";
   onMethodChange: (method: "card" | "nequi") => void;
   onBack: () => void;
-  onAuthorized: (wompiData?: { token: string; maskedDetails: string }) => Promise<void> | void;
+  onAuthorized: (wompiData: { token: string; maskedDetails: string; reference: string }) => Promise<void> | void;
   loading?: boolean;
 }
 
@@ -106,10 +106,8 @@ export function PaymentStep({
   const [currentReference, setCurrentReference] = useState<string | null>(null);
   const [isSignatureLoading, setIsSignatureLoading] = useState(false);
 
-  const cleanupWompiOverlay = useCallback(() => {
-    if (typeof document === "undefined") return;
-    document.querySelectorAll(".waybox-backdrop, .waybox-preload-wrapper").forEach((el) => el.remove());
-  }, []);
+  const canOpenCheckout =
+    isWidgetLoaded && !!integritySignature && !!currentReference && !isProcessing && !isSignatureLoading;
 
   // Load Wompi script
   useEffect(() => {
@@ -136,6 +134,12 @@ export function PaymentStep({
     };
 
     document.head.appendChild(script);
+  }, []);
+
+  // Ensure any leftover overlay is removed when mounting/unmounting this step
+  useEffect(() => {
+    cleanupWompiOverlayDom();
+    return () => cleanupWompiOverlayDom();
   }, []);
 
   // Fetch signature on mount/amount change with AbortController timeout
@@ -184,6 +188,7 @@ export function PaymentStep({
     }
   }, [amount]);
 
+  // Prefetch signature/reference so the user doesn't need to click twice.
   useEffect(() => {
     fetchSignature();
   }, [fetchSignature]);
@@ -196,8 +201,8 @@ export function PaymentStep({
     }
 
     if (!integritySignature || !currentReference) {
-      setWompiError("Preparando transacción... intenta de nuevo.");
-      fetchSignature(); 
+      // Evita el doble click: si aún no está lista la firma/referencia, no intentes abrir.
+      setWompiError("Preparando transacción, por favor espera un momento.");
       return;
     }
 
@@ -226,11 +231,12 @@ export function PaymentStep({
     const timeoutId = window.setTimeout(() => {
       setIsProcessing(false);
       setIsTakingLong(false);
-      cleanupWompiOverlay();
+      cleanupWompiOverlayDom();
       setWompiError("El proceso tardó demasiado. Por favor, intenta de nuevo.");
     }, 30000);
 
     try {
+      cleanupWompiOverlayDom();
       const checkout = new window.WidgetCheckout({
         currency: "COP",
         amountInCents: Math.max(150000, Math.round(amount * 100)),
@@ -253,63 +259,79 @@ export function PaymentStep({
       checkout.open((result: WidgetCheckoutResult) => {
         window.clearTimeout(timeoutId);
         window.clearTimeout(longTimeoutId);
-        cleanupWompiOverlay();
+        cleanupWompiOverlayDom();
         setIsProcessing(false);
         setIsTakingLong(false);
         
         // Regenerate signature for next attempt
         fetchSignature();
 
-        if (result.transaction) {
-          const tx = result.transaction;
-          
-          if (tx.status === "APPROVED") {
-            const paymentInfo = tx.paymentMethod;
-            let maskedDetails = "Pago aprobado";
-            
-            if (paymentInfo?.type === "CARD" && paymentInfo.extra) {
-              maskedDetails = `${paymentInfo.extra.brand || "Tarjeta"} •••• ${paymentInfo.extra.lastFour || "****"}`;
-            } else if (paymentInfo?.type === "NEQUI") {
-              maskedDetails = "Nequi autorizado";
-            }
+        if (!result.transaction) {
+          setWompiError("No recibimos confirmación de Wompi. Intenta de nuevo.");
+          return;
+        }
 
-            onAuthorized({
-              token: tx.id,
-              maskedDetails,
-            });
-          } else if (tx.status === "PENDING") {
-            onAuthorized({
-              token: tx.id,
-              maskedDetails: "Pago pendiente de confirmación",
-            });
-          } else {
-            setWompiError(`El pago fue ${tx.status === "DECLINED" ? "rechazado" : "cancelado"}. Por favor, intenta de nuevo.`);
+        const tx = result.transaction;
+        const paymentInfo = (tx as any).payment_method ?? tx.paymentMethod;
+        const paymentSourceId =
+          (paymentInfo as any)?.extra?.payment_source_id ??
+          (paymentInfo as any)?.extra?.token ??
+          (tx as any)?.payment_source_id ??
+          tx.id ??
+          null;
+
+        if (!paymentSourceId) {
+          setWompiError("No recibimos el payment_source_id de Wompi. No podemos guardar la suscripci?n.");
+          console.warn("Wompi sin payment_source_id", { transaction: tx, paymentInfo });
+          return;
+        }
+        
+        if (tx.status === "APPROVED") {
+          let maskedDetails = "Pago aprobado";
+          
+          if (paymentInfo?.type === "CARD" && (paymentInfo as any)?.extra) {
+            const extra = (paymentInfo as any).extra;
+            maskedDetails = `${extra.brand || "Tarjeta"} **** ${extra.lastFour || "****"}`;
+          } else if (paymentInfo?.type === "NEQUI") {
+            maskedDetails = "Nequi autorizado";
           }
+
+          onAuthorized({
+            token: paymentSourceId,
+            reference: currentReference ?? "",
+            maskedDetails,
+          });
+        } else if (tx.status === "PENDING") {
+          onAuthorized({
+            token: paymentSourceId,
+            reference: currentReference ?? "",
+            maskedDetails: "Pago pendiente de confirmación",
+          });
         } else {
-           setWompiError(null);
+          setWompiError(`El pago fue ${tx.status === "DECLINED" ? "rechazado" : "cancelado"}. Por favor, intenta de nuevo.`);
         }
       });
     } catch (error) {
       window.clearTimeout(timeoutId);
       window.clearTimeout(longTimeoutId);
-      cleanupWompiOverlay();
+      cleanupWompiOverlayDom();
       setIsProcessing(false);
       setIsTakingLong(false);
       setWompiError("Error al abrir el checkout de Wompi.");
       console.error("Wompi checkout error:", error);
     }
-  }, [isWidgetLoaded, amount, donor, onAuthorized, integritySignature, currentReference, fetchSignature, cleanupWompiOverlay]);
+  }, [isWidgetLoaded, amount, donor, onAuthorized, integritySignature, currentReference, fetchSignature]);
 
   return (
     <section className="grid gap-6">
       <div className="rounded-4xl bg-white/95 p-6 shadow-card">
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-foundation-green">Revisa tus datos</p>
             <h2 className="text-xl font-semibold text-slate-900">{donor.firstName} {donor.lastName}</h2>
             <p className="text-sm text-slate-500">{donor.email} · {donor.phone}</p>
           </div>
-          <div className="ml-auto text-right">
+          <div className="text-left sm:text-right">
             <p className="text-sm text-slate-500">{isRecurring ? "Donación mensual" : "Donación única"}</p>
             <p className="text-2xl font-semibold text-foundation-blue">{formatCurrencyCOP(amount)}</p>
           </div>
@@ -320,7 +342,7 @@ export function PaymentStep({
       </div>
 
       <div className="grid gap-4 rounded-4xl bg-white/95 p-6 shadow-card">
-        <div>
+        <div className="space-y-1">
           <p className="text-sm font-semibold text-foundation-green">Paso 2</p>
           <h2 className="text-2xl font-semibold text-slate-900">Configura tu pago seguro</h2>
           <p className="text-sm text-slate-500">Solo lo harás una vez. Wompi guardará tu medio de pago con total seguridad.</p>
@@ -379,14 +401,14 @@ export function PaymentStep({
                   type="button"
                   onClick={openWompiCheckout}
                   loading={isProcessing || !isWidgetLoaded || isSignatureLoading}
-                  className="w-full max-w-xs text-lg py-6"
+                  disabled={!canOpenCheckout}
+                  className="w-full sm:max-w-xs text-lg py-6"
                 >
                   {!isWidgetLoaded || isSignatureLoading
-                    ? "Cargando..." 
-                    : isProcessing 
-                      ? "Procesando..." 
-                      : `Pagar ${formatCurrencyCOP(amount)}`
-                  }
+                    ? "Preparando..."
+                    : isProcessing
+                      ? "Procesando..."
+                      : `Pagar ${formatCurrencyCOP(amount)}`}
                 </Button>
                 {isTakingLong && (
                   <div className="flex items-center gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -406,7 +428,7 @@ export function PaymentStep({
         <SecurityNote />
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" variant="ghost" onClick={onBack} disabled={isProcessing}>
+          <Button type="button" variant="ghost" onClick={onBack} disabled={isProcessing} className="w-full sm:w-auto">
             Volver al paso anterior
           </Button>
         </div>

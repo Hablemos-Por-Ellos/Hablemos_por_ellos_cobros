@@ -1,14 +1,14 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { DonorFormStep } from "./donor-form-step";
 import { PaymentStep } from "./payment-step";
 import { ConfirmationStep } from "./confirmation-step";
 import { Stepper } from "./stepper";
 import { Toast } from "@/components/ui/toast";
 import { type DonorFormValues } from "@/lib/schemas";
-import { simulateWompiAuthorization } from "@/lib/wompi";
 import { sleep } from "@/lib/utils";
+import { cleanupWompiOverlayDom } from "@/lib/wompi";
 
 const INITIAL_DONOR: DonorFormValues = {
   firstName: "",
@@ -33,6 +33,12 @@ export function DonationWizard() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [confirmationStatus, setConfirmationStatus] = useState<"confirmed" | "pending">("confirmed");
   const [paymentSummary, setPaymentSummary] = useState("Tarjeta •••• 4242");
+
+  // Remove any stuck Wompi overlay when step changes or component unmounts
+  useEffect(() => {
+    cleanupWompiOverlayDom();
+    return () => cleanupWompiOverlayDom();
+  }, [step]);
 
   const persistDonation = useCallback(
     async (
@@ -81,13 +87,20 @@ export function DonationWizard() {
     }
   };
 
-  const handlePaymentAuthorized = async (wompiData?: { token: string; maskedDetails: string }) => {
+  const handlePaymentAuthorized = async (wompiData: { token: string; maskedDetails: string; reference: string }) => {
     try {
       setIsLoading(true);
-      // Use real Wompi data if provided, otherwise fall back to simulation for demo mode
-      const paymentData = wompiData || simulateWompiAuthorization(paymentMethod);
+      if (!wompiData?.token) {
+        throw new Error("No recibimos confirmaci\u00f3n del pago con Wompi. Int\u00e9ntalo de nuevo.");
+      }
+      const paymentData = wompiData;
       const result = await persistDonation("confirm", undefined, {
-        wompi: { token: paymentData.token, maskedDetails: paymentData.maskedDetails },
+        wompi: {
+          token: paymentData.token,
+          paymentSourceId: paymentData.token,
+          reference: paymentData.reference,
+          maskedDetails: paymentData.maskedDetails,
+        },
       });
       setPaymentSummary(paymentData.maskedDetails);
       setConfirmationStatus(result?.status === "subscription_created" ? "confirmed" : "pending");

@@ -1,20 +1,210 @@
+import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { getServiceSupabaseClient } from "@/lib/supabase-server";
+import { getWompiEventsSecret } from "@/lib/wompi";
+
+type WompiTransaction = {
+  id: string;
+  status?: string;
+  amount_in_cents?: number;
+  amountInCents?: number;
+  currency?: string;
+  reference?: string;
+  payment_method_type?: string;
+  paymentMethodType?: string;
+  payment_method?: { type?: string; extra?: Record<string, unknown> };
+  paymentMethod?: { type?: string; extra?: Record<string, unknown> };
+};
+
+function parseSignatureHeader(header: string | null) {
+  if (!header) return { timestamp: null, signature: null };
+  const parts = header.split(",").map((part) => part.trim());
+  const timestamp = parts.find((p) => p.startsWith("t="))?.slice(2) ?? null;
+  const signature = parts.find((p) => p.startsWith("v1="))?.slice(3) ?? null;
+  return { timestamp, signature };
+}
+
+function safeCompare(a: string, b: string | null) {
+  if (!b) return false;
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
+}
+
+function addOneMonthKeepingDay(base: Date) {
+  const targetDay = base.getDate();
+  const candidate = new Date(base);
+  candidate.setMonth(candidate.getMonth() + 1, 1);
+  const daysInTargetMonth = new Date(candidate.getFullYear(), candidate.getMonth() + 1, 0).getDate();
+  candidate.setDate(Math.min(targetDay, daysInTargetMonth));
+  return candidate;
+}
 
 export async function POST(request: Request) {
-  const payload = await request.json().catch(() => null);
-  if (!payload) {
-    return NextResponse.json({ message: "Solicitud inválida" }, { status: 400 });
+  const rawBody = await request.text().catch(() => "");
+  if (!rawBody) {
+    return NextResponse.json({ message: "Solicitud inv?lida" }, { status: 400 });
   }
+
+  const wompiSecret = getWompiEventsSecret();
+  if (!wompiSecret) {
+    return NextResponse.json({ message: "Configura WOMPI_EVENTS_SECRET para validar webhooks" }, { status: 500 });
+  }
+
+  const signatureHeader =
+    request.headers.get("x-event-signature") ??
+    request.headers.get("x-message-signature") ??
+    request.headers.get("x-signature");
+
+  const { timestamp, signature } = parseSignatureHeader(signatureHeader);
+  if (!timestamp || !signature) {
+    return NextResponse.json({ message: "Falta firma del webhook" }, { status: 400 });
+  }
+
+  const signedPayload = `${timestamp}.${rawBody}`;
+  const computed = crypto.createHmac("sha256", wompiSecret).update(signedPayload).digest("hex");
+
+  if (!safeCompare(computed, signature)) {
+    return NextResponse.json({ message: "Firma inv?lida" }, { status: 401 });
+  }
+
+  const payload = JSON.parse(rawBody) as { event?: string; data?: { transaction?: WompiTransaction } };
+  const transaction = payload?.data?.transaction;
 
   const supabase = getServiceSupabaseClient();
   if (!supabase) {
-    return NextResponse.json({ message: "Webhook recibido en modo demostración" }, { status: 200 });
+    return NextResponse.json(
+      { message: "Webhook recibido en modo demostraci?n (sin SUPABASE_SERVICE_ROLE_KEY)" },
+      { status: 200 }
+    );
   }
 
-  await supabase.from("webhook_events").insert({ raw: payload });
+  const { error: logError } = await supabase!.from("webhook_events").insert({ raw: payload });
+  if (logError) {
+    return NextResponse.json(
+      { message: "No se pudo registrar el evento", details: logError?.message ?? "unknown" },
+      { status: 500 }
+    );
+  }
 
-  // TODO: actualizar tabla payments/subscriptions según evento real de Wompi.
+  if (!transaction?.id) {
+    return NextResponse.json({ message: "Evento guardado sin transacci?n" }, { status: 200 });
+  }
 
-  return NextResponse.json({ message: "Evento registrado" }, { status: 200 });
+  const tx = transaction as WompiTransaction;
+
+  const status = (tx.status ?? "").toLowerCase();
+  const wompiTransactionId = tx.id;
+  const amountInCents = tx.amount_in_cents ?? tx.amountInCents ?? null;
+  const currency = tx.currency ?? "COP";
+  const reference = tx.reference ?? null;
+  const paymentSourceId =
+    (tx.payment_method ?? tx.paymentMethod)?.extra?.payment_source_id ??
+    (tx.payment_method ?? tx.paymentMethod)?.extra?.token ??
+    null;
+
+  // Try to find related subscription
+  let subscriptionId: string | null = null;
+  if (paymentSourceId) {
+    const { data: subBySource } = await supabase!
+      .from("subscriptions")
+      .select("id")
+      .eq("wompi_payment_source_id", paymentSourceId)
+      .maybeSingle();
+    subscriptionId = subBySource?.id ?? null;
+  }
+  if (!subscriptionId && reference) {
+    const { data: subByRef } = await supabase!
+      .from("subscriptions")
+      .select("id")
+      .eq("reference", reference)
+      .maybeSingle();
+    subscriptionId = subByRef?.id ?? null;
+  }
+
+  const amountCop =
+    typeof amountInCents === "number" ? Math.round((amountInCents as number) / 100) : null;
+
+  // Upsert payment linked to the transaction
+  const { data: existingPayment, error: paymentLookupError } = await supabase!
+    .from("payments")
+    .select("id")
+    .eq("wompi_transaction_id", wompiTransactionId)
+    .maybeSingle();
+
+  if (paymentLookupError) {
+    return NextResponse.json(
+      { message: "Error consultando pagos", details: paymentLookupError?.message ?? "unknown" },
+      { status: 500 }
+    );
+  }
+
+  const paymentPayload: Record<string, unknown> = {
+    subscription_id: subscriptionId,
+    amount: amountCop,
+    currency,
+    status,
+    wompi_transaction_id: wompiTransactionId,
+  };
+
+  let paymentError = null;
+  const existingPaymentId = existingPayment?.id ?? null;
+  if (existingPaymentId) {
+    const { error } = await supabase!.from("payments").update(paymentPayload).eq("id", existingPaymentId);
+    paymentError = error;
+  } else {
+    const { error } = await supabase!.from("payments").insert(paymentPayload);
+    paymentError = error;
+  }
+
+  if (paymentError) {
+    return NextResponse.json(
+      { message: "No se pudo guardar el pago", details: paymentError?.message ?? "unknown" },
+      { status: 500 }
+    );
+  }
+
+  // Update subscription status according to transaction outcome
+  if (subscriptionId) {
+    let subscriptionStatus: string | null = null;
+    if (status === "approved") {
+      subscriptionStatus = "active";
+    } else if (status === "declined") {
+      subscriptionStatus = "past_due";
+    } else if (status === "pending") {
+      subscriptionStatus = "pending";
+    }
+
+    if (subscriptionStatus) {
+      const updates: Record<string, unknown> = { status: subscriptionStatus };
+
+      if (subscriptionStatus === "active") {
+        const { data: subscription, error: fetchSubError } = await supabase!
+          .from("subscriptions")
+          .select("next_payment_date")
+          .eq("id", subscriptionId)
+          .maybeSingle();
+
+        const nextDate = subscription?.next_payment_date;
+        if (!fetchSubError && nextDate) {
+          const baseDate = new Date(nextDate as unknown as string);
+          updates.next_payment_date = addOneMonthKeepingDay(baseDate).toISOString();
+        }
+      }
+
+      const { error } = await supabase!.from("subscriptions").update(updates).eq("id", subscriptionId);
+      if (error) {
+        return NextResponse.json(
+          { message: "No se pudo actualizar la suscripción", details: error?.message ?? "unknown" },
+          { status: 500 }
+        );
+      }
+    }
+  }
+
+  return NextResponse.json(
+    { message: "Evento procesado", transactionId: wompiTransactionId, status },
+    { status: 200 }
+  );
 }

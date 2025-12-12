@@ -64,7 +64,7 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
   return (
     <form onSubmit={handleSubmit} className="grid gap-6">
       <div className="grid gap-4 rounded-4xl bg-white/90 p-6 shadow-card">
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="inline-flex items-center gap-3 rounded-full bg-foundation-blue/10 px-4 py-2 text-sm text-foundation-blue">
             <span>💙</span>
             <span>Tu apoyo mensual cambia vidas</span>
@@ -145,14 +145,14 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
       </div>
 
       <div className="grid gap-4 rounded-4xl bg-white/95 p-6 shadow-card">
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-foundation-green">Tu donación</p>
             <h2 className="text-2xl font-semibold text-slate-900">{formatCurrencyCOP(values.amount)} COP</h2>
           </div>
-          <div className="ml-auto flex items-center gap-3 text-sm text-slate-500">
+          <div className="flex items-center gap-3 text-sm text-slate-500">
             <span className="text-base">🩺</span>
-            Tu aporte se transforma en alimento, rescates y atención veterinaria.
+            <span className="leading-snug">Tu aporte se transforma en alimento, rescates y atención veterinaria.</span>
           </div>
         </div>
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
@@ -171,7 +171,7 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
             <p className="text-sm text-slate-500">Desmarca si solo quieres un cobro único.</p>
           </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
           {amountOptions.map((option) => (
             <AmountChip
               key={option.value}
@@ -211,7 +211,7 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
         <p>
           Al continuar, crearemos un borrador de tu suscripción y te guiaremos al pago seguro con Wompi.
         </p>
-        <Button type="submit" loading={loading} className="mt-2 self-start">
+        <Button type="submit" loading={loading} className="mt-2 w-full sm:w-auto">
           {values.isRecurring ? "Continuar con mi donación mensual" : "Continuar con mi donación única"}
         </Button>
       </div>
