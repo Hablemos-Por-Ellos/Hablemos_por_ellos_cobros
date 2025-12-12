@@ -7,12 +7,13 @@ import { formatCurrencyCOP } from "@/lib/utils";
 interface ConfirmationStepProps {
   donor: DonorFormValues;
   amount: number;
+  isRecurring: boolean;
   status: "confirmed" | "pending";
   paymentSummary: string;
   onGoHome: () => void;
 }
 
-export function ConfirmationStep({ donor, amount, status, paymentSummary, onGoHome }: ConfirmationStepProps) {
+export function ConfirmationStep({ donor, amount, isRecurring, status, paymentSummary, onGoHome }: ConfirmationStepProps) {
   return (
     <section className="grid gap-6 rounded-4xl bg-white/95 p-8 text-center shadow-card">
       <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-foundation-green/10 text-4xl">
@@ -25,7 +26,9 @@ export function ConfirmationStep({ donor, amount, status, paymentSummary, onGoHo
         </h2>
         <p className="mt-2 text-lg text-slate-600">
           {status === "confirmed"
-            ? `Tu donación mensual de ${formatCurrencyCOP(amount)} quedó activa. Cada mes recibirás un comprobante en ${donor.email}.`
+            ? isRecurring
+              ? `Tu donación mensual de ${formatCurrencyCOP(amount)} quedó activa. Cada mes recibirás un comprobante en ${donor.email}.`
+              : `Tu donación única de ${formatCurrencyCOP(amount)} quedó registrada. Te enviaremos el comprobante a ${donor.email}.`
             : `Recibirás un correo en ${donor.email} con la confirmación del banco en los próximos minutos.`}
         </p>
       </div>
@@ -37,7 +40,7 @@ export function ConfirmationStep({ donor, amount, status, paymentSummary, onGoHo
           <p className="text-sm text-slate-600">{donor.email} · {donor.phone}</p>
         </div>
         <div className="grid gap-1">
-          <p className="text-sm font-semibold text-slate-500">Monto mensual</p>
+          <p className="text-sm font-semibold text-slate-500">{isRecurring ? "Monto mensual" : "Monto"}</p>
           <p className="text-2xl font-semibold text-foundation-blue">{formatCurrencyCOP(amount)}</p>
         </div>
         <div className="grid gap-1">

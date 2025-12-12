@@ -1,6 +1,7 @@
 # Mini-app Donaciones Mensuales · Fundación Hablemos por Ellos
 
 Mini-aplicación web moderna, emocional y confiable para gestionar suscripciones de donación mensual. Está pensada para incrustarse en un sitio principal (por ejemplo Wix) como módulo independiente que guía al donante desde la captura de datos hasta la autorización segura con Wompi y persiste la suscripción en Supabase.
+Debe ser completamente funcional y gratis el flujo final.
 
 ## Características principales
 
@@ -63,6 +64,17 @@ npm start        # modo producción después de build
 - `subscriptions`: FK a `donors`, monto, frecuencia, estado, referencia Wompi, método de pago, fechas de inicio/renovación.
 - `payments`: registros por cobro mensual (opcional) sincronizados por webhook.
 - `webhook_events`: bitácora de eventos crudos de Wompi para auditoría.
+
+### Baja de suscripciones (versión actual)
+
+En esta primera versión, **la cancelación de donaciones mensuales se gestiona de forma manual por la fundación**. El flujo recomendado es:
+
+- El donante escribe a un canal de soporte (correo, WhatsApp, redes) solicitando la cancelación.
+- Un responsable interno ingresa a Supabase y marca la suscripción como cancelada en la tabla `subscriptions` (por ejemplo, cambiando `status` a `"canceled"` y llenando `cancelled_at`).
+- Opcionalmente se registra la acción en una tabla de auditoría o en `payments`.
+- La lógica de cobro recurrente (cron/función externa) **debe ignorar suscripciones con estado cancelado**, por lo que no se siguen intentando cobros.
+
+> Importante: el token/método de pago que devuelve Wompi puede permanecer almacenado solo para fines de historial/auditoría; simplemente deja de utilizarse una vez que la suscripción está cancelada.
 
 ## Embed en Wix
 

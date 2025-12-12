@@ -3,7 +3,7 @@ import { cn, formatCurrencyCOP } from "@/lib/utils";
 type AmountChipProps = {
   value: number;
   selected: boolean;
-  description: string;
+  description?: string;
   onSelect: (value: number) => void;
 };
 
@@ -20,7 +20,7 @@ export function AmountChip({ value, description, selected, onSelect }: AmountChi
       )}
     >
       <span className="text-lg font-semibold">{formatCurrencyCOP(value)}</span>
-      <span className="text-sm text-slate-500">{description}</span>
+      {description ? <span className="text-sm text-slate-500">{description}</span> : null}
     </button>
   );
 }

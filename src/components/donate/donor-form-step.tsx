@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { donorFormSchema, type DonorFormValues } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
 import { TextInput } from "@/components/ui/input";
@@ -9,9 +9,12 @@ import { AmountChip } from "@/components/ui/amount-chip";
 import { formatCurrencyCOP } from "@/lib/utils";
 
 const amountOptions = [
-  { value: 20000, description: "Alimento y arena para un peludo" },
-  { value: 50000, description: "Medicamentos y esterilización" },
-  { value: 100000, description: "Rescate y hogar temporal" },
+  { value: 2500, description: "" },
+  { value: 5000, description: "" },
+  { value: 10000, description: "" },
+  { value: 20000, description: "" },
+  { value: 50000, description: "" },
+  { value: 100000, description: "" },
 ];
 
 interface DonorFormStepProps {
@@ -26,16 +29,6 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
   const [customAmount, setCustomAmount] = useState(
     amountOptions.some((option) => option.value === values.amount) ? "" : values.amount.toString()
   );
-
-  const impactCopy = useMemo(() => {
-    if (values.amount >= 100000) {
-      return "Garantizas rescate, tratamientos y hogar temporal";
-    }
-    if (values.amount >= 50000) {
-      return "Cubres medicamentos y citas veterinarias";
-    }
-    return "Aseguras alimento balanceado cada semana";
-  }, [values.amount]);
 
   const handleFieldChange = (field: keyof DonorFormValues, value: string | number | boolean) => {
     setErrors((prev) => ({ ...prev, [field]: "" }));
@@ -71,7 +64,7 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
   return (
     <form onSubmit={handleSubmit} className="grid gap-6">
       <div className="grid gap-4 rounded-4xl bg-white/90 p-6 shadow-card">
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="inline-flex items-center gap-3 rounded-full bg-foundation-blue/10 px-4 py-2 text-sm text-foundation-blue">
             <span>💙</span>
             <span>Tu apoyo mensual cambia vidas</span>
@@ -79,7 +72,7 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
           <div className="flex items-center gap-2 text-sm text-slate-500">
             <span>🐶</span>
             <span>🐱</span>
-            <span>+120 peludos atendidos cada mes</span>
+            <span>Peludos atendidos cada mes</span>
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -147,31 +140,38 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
             onChange={(event) => handleFieldChange("city", event.target.value)}
             error={errors.city}
           />
-          <label className="flex items-start gap-3 rounded-3xl bg-foundation-green/5 p-4 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={values.wantsUpdates}
-              onChange={(event) => handleFieldChange("wantsUpdates", event.target.checked)}
-              className="mt-1 h-5 w-5 rounded border-foundation-green text-foundation-green focus:ring-foundation-green"
-            />
-            <span>Quiero recibir historias y actualizaciones de los peludos.</span>
-          </label>
+          {/* Removed: opt-in for receiving updates */}
         </div>
       </div>
 
       <div className="grid gap-4 rounded-4xl bg-white/95 p-6 shadow-card">
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-foundation-green">Tu donación mensual</p>
+            <p className="text-sm font-semibold text-foundation-green">Tu donación</p>
             <h2 className="text-2xl font-semibold text-slate-900">{formatCurrencyCOP(values.amount)} COP</h2>
-            <p className="text-sm text-slate-500">{impactCopy}</p>
           </div>
-          <div className="ml-auto flex items-center gap-3 text-sm text-slate-500">
+          <div className="flex items-center gap-3 text-sm text-slate-500">
             <span className="text-base">🩺</span>
-            Tu aporte se transforma en alimento, rescates y atención veterinaria.
+            <span className="leading-snug">Tu aporte se transforma en alimento, rescates y atención veterinaria.</span>
           </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <input
+            id="isRecurring"
+            name="isRecurring"
+            type="checkbox"
+            className="h-5 w-5 rounded border-slate-300 text-foundation-blue focus:ring-foundation-blue"
+            checked={values.isRecurring}
+            onChange={(event) => handleFieldChange("isRecurring", event.target.checked)}
+          />
+          <div className="leading-snug">
+            <label htmlFor="isRecurring" className="font-semibold text-slate-800">
+              Activar cobro mensual automático
+            </label>
+            <p className="text-sm text-slate-500">Desmarca si solo quieres un cobro único.</p>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
           {amountOptions.map((option) => (
             <AmountChip
               key={option.value}
@@ -194,10 +194,11 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
             name="customAmount"
             inputMode="numeric"
             className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-base text-slate-900 focus:border-foundation-blue focus:outline-none"
-            placeholder="Ingresa un valor mínimo de $10.000"
+            placeholder="Ingresa el monto que quieras donar"
             value={customAmount}
             onChange={(event) => handleCustomAmount(event.target.value)}
           />
+          <p className="text-xs text-slate-500">Monto mínimo 1.500 COP.</p>
           {errors.amount && <span className="text-xs text-foundation-warm">{errors.amount}</span>}
         </div>
       </div>
@@ -205,13 +206,13 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
       <div className="flex flex-col gap-3 rounded-4xl bg-white/90 p-6 text-sm text-slate-600 shadow-card">
         <p>
           Esta es una donación <span className="font-semibold text-foundation-blue">mensual</span>. Puedes cancelarla cuando
-          quieras escribiendo a <span className="font-semibold">contacto@hablemosporellos.org</span>.
+          quieras contactando a <span className="font-semibold">la fundación Hablemos por ellos</span>.
         </p>
         <p>
           Al continuar, crearemos un borrador de tu suscripción y te guiaremos al pago seguro con Wompi.
         </p>
-        <Button type="submit" loading={loading} className="mt-2 self-start">
-          Continuar con mi donación mensual
+        <Button type="submit" loading={loading} className="mt-2 w-full sm:w-auto">
+          {values.isRecurring ? "Continuar con mi donación mensual" : "Continuar con mi donación única"}
         </Button>
       </div>
     </form>
