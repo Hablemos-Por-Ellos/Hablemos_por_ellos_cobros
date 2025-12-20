@@ -80,7 +80,21 @@ export async function POST(request: Request) {
     );
   }
 
-  const { error: logError } = await supabase!.from("webhook_events").insert({ raw: payload });
+  // Sanitize event: store only non-sensitive fields (no cardholder, no customer data)
+  const sanitizedEvent = {
+    event: payload?.event ?? null,
+    transaction: transaction ? {
+      id: transaction.id,
+      status: transaction.status,
+      reference: transaction.reference,
+      amount_in_cents: transaction.amount_in_cents ?? transaction.amountInCents,
+      currency: transaction.currency,
+      payment_method_type: transaction.payment_method_type ?? transaction.paymentMethodType,
+    } : null,
+    timestamp: new Date().toISOString(),
+  };
+
+  const { error: logError } = await supabase!.from("webhook_events").insert({ raw: sanitizedEvent });
   if (logError) {
     return NextResponse.json(
       { message: "No se pudo registrar el evento", details: logError?.message ?? "unknown" },
@@ -187,8 +201,8 @@ export async function POST(request: Request) {
           .maybeSingle();
 
         const nextDate = subscription?.next_payment_date;
-        if (!fetchSubError && nextDate) {
-          const baseDate = new Date(nextDate as unknown as string);
+        if (!fetchSubError) {
+          const baseDate = nextDate ? new Date(nextDate as unknown as string) : new Date();
           updates.next_payment_date = addOneMonthKeepingDay(baseDate).toISOString();
         }
       }

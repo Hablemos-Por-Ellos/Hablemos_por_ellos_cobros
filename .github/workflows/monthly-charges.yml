@@ -1,0 +1,35 @@
+name: Monthly Charges
+
+on:
+  schedule:
+    - cron: "0 6 1 * *" # día 1 de cada mes 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Run monthly charges
+        run: npm run monthly-charges
+        env:
+          WOMPI_ENV: prod
+
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+          NEXT_PUBLIC_WOMPI_PUBLIC_KEY_PROD: ${{ secrets.NEXT_PUBLIC_WOMPI_PUBLIC_KEY_PROD }}
+          WOMPI_PRIVATE_KEY_PROD: ${{ secrets.WOMPI_PRIVATE_KEY_PROD }}

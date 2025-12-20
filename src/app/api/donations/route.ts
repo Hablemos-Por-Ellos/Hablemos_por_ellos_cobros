@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import { subscriptionPayloadSchema } from "@/lib/schemas";
 import { getServiceSupabaseClient } from "@/lib/supabase-server";
 
+function addOneMonthKeepingDay(base: Date) {
+  const targetDay = base.getDate();
+  const candidate = new Date(base);
+  candidate.setMonth(candidate.getMonth() + 1, 1);
+  const daysInTargetMonth = new Date(candidate.getFullYear(), candidate.getMonth() + 1, 0).getDate();
+  candidate.setDate(Math.min(targetDay, daysInTargetMonth));
+  return candidate;
+}
+
 export async function POST(request: Request) {
   const raw = await request.json().catch(() => null);
 
@@ -67,6 +76,7 @@ export async function POST(request: Request) {
       wompi_payment_source_id: wompi?.paymentSourceId ?? wompi?.token ?? null,
       wompi_masked_details: wompi?.maskedDetails ?? null,
       reference,
+      next_payment_date: isRecurring ? addOneMonthKeepingDay(new Date()).toISOString() : null,
     })
     .select()
     .single();
