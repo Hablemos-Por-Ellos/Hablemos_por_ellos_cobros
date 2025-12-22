@@ -169,6 +169,14 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
               Activar cobro mensual automático
             </label>
             <p className="text-sm text-slate-500">Desmarca si solo quieres un cobro único.</p>
+            <div className="mt-2 flex items-start gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <span role="img" aria-label="Alerta" className="text-base">
+                ⚠️
+              </span>
+              <p className="leading-snug">
+                Cobro automático solo con tarjeta; con Nequi deberás aprobar cada mes.
+              </p>
+            </div>
           </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">

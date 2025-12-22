@@ -26,8 +26,8 @@ function parseSignatureHeader(header: string | null) {
 
 function safeCompare(a: string, b: string | null) {
   if (!b) return false;
-  const aBuf = Buffer.from(a);
-  const bBuf = Buffer.from(b);
+  const aBuf = new Uint8Array(Buffer.from(a));
+  const bBuf = new Uint8Array(Buffer.from(b));
   if (aBuf.length !== bBuf.length) return false;
   return crypto.timingSafeEqual(aBuf, bBuf);
 }
@@ -69,19 +69,44 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Firma inv?lida" }, { status: 401 });
   }
 
-  const payload = JSON.parse(rawBody) as { event?: string; data?: { transaction?: WompiTransaction } };
+  // Validar antigüedad del timestamp (prevenir replay attacks)
+  const eventTime = parseInt(timestamp) * 1000;
+  const now = Date.now();
+  const FIVE_MINUTES = 5 * 60 * 1000;
+  if (Math.abs(now - eventTime) > FIVE_MINUTES) {
+    return NextResponse.json({ message: "Evento expirado" }, { status: 400 });
+  }
+
+  //const payload = JSON.parse(rawBody) as { event?: string; data?: { transaction?: WompiTransaction } };
+  //Old handler had no try-catch, adding it to avoid 500 on invalid JSON
+  let payload;
+  try {
+    payload = JSON.parse(rawBody) as { event?: string; data?: { transaction?: WompiTransaction } };
+  } catch {
+    return NextResponse.json({ message: "JSON invalido" }, { status: 400 });
+  }
+    
   const transaction = payload?.data?.transaction;
 
   const supabase = getServiceSupabaseClient();
+  const allowDemo = (process.env.ALLOW_DEMO_MODE === "true") || (process.env.NODE_ENV !== "production");
   if (!supabase) {
+    if (allowDemo) {
+      return NextResponse.json(
+        { message: "Webhook recibido en modo demostración (sin SUPABASE_SERVICE_ROLE_KEY)" },
+        { status: 200 }
+      );
+    }
     return NextResponse.json(
-      { message: "Webhook recibido en modo demostraci?n (sin SUPABASE_SERVICE_ROLE_KEY)" },
-      { status: 200 }
+      { message: "Configuración inválida en producción: falta SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY" },
+      { status: 500 }
     );
   }
 
   // Sanitize event: store only non-sensitive fields (no cardholder, no customer data)
   const sanitizedEvent = {
+    transaction_id: transaction?.id ?? null,
+    event_type: payload?.event ?? null,
     event: payload?.event ?? null,
     transaction: transaction ? {
       id: transaction.id,
@@ -94,12 +119,17 @@ export async function POST(request: Request) {
     timestamp: new Date().toISOString(),
   };
 
+  // Intenta insertar; si hay conflicto de índice único, continúa
   const { error: logError } = await supabase!.from("webhook_events").insert({ raw: sanitizedEvent });
-  if (logError) {
+  if (logError && logError.code !== "23505") {
+    // 23505 = unique constraint violation (evento duplicado, ignorar)
     return NextResponse.json(
       { message: "No se pudo registrar el evento", details: logError?.message ?? "unknown" },
       { status: 500 }
     );
+  }
+  if (logError?.code === "23505") {
+    console.log(`Evento duplicado para transaction ${transaction?.id}, ignorando...`);
   }
 
   if (!transaction?.id) {
@@ -196,14 +226,20 @@ export async function POST(request: Request) {
       if (subscriptionStatus === "active") {
         const { data: subscription, error: fetchSubError } = await supabase!
           .from("subscriptions")
-          .select("next_payment_date")
+          .select("next_payment_date, processed_transaction_ids")
           .eq("id", subscriptionId)
           .maybeSingle();
 
-        const nextDate = subscription?.next_payment_date;
-        if (!fetchSubError) {
-          const baseDate = nextDate ? new Date(nextDate as unknown as string) : new Date();
-          updates.next_payment_date = addOneMonthKeepingDay(baseDate).toISOString();
+        const processedIds = subscription?.processed_transaction_ids || [];
+        // Solo actualizar next_payment_date si este transaction aún no fue procesado (idempotencia)
+        if (!processedIds.includes(wompiTransactionId)) {
+          const nextDate = subscription?.next_payment_date;
+          if (!fetchSubError) {
+            const baseDate = nextDate ? new Date(nextDate as unknown as string) : new Date();
+            updates.next_payment_date = addOneMonthKeepingDay(baseDate).toISOString();
+            // Agregar este transaction_id a la lista de procesados
+            updates.processed_transaction_ids = [...processedIds, wompiTransactionId];
+          }
         }
       }
 

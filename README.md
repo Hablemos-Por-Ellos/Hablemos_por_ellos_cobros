@@ -7,10 +7,10 @@ Debe ser completamente funcional y gratis el flujo final.
 
 - Flujo `/donar` en tres pasos (datos → pago seguro → confirmación).
 - UI tierna y minimalista con mensajes de transparencia, indicadores de seguridad y componentes optimizados para conversión.
-- Selección de montos predefinidos (20k, 50k, 100k COP) + monto personalizado.
+- Selección de montos predefinidos (2.5k, 5k, 10k, 20k, 50k, 100k COP) + monto personalizado.
 - Espacio visual y lógica preparada para incrustar el widget oficial de Wompi (tarjeta y Nequi).
 - API Routes con Supabase para almacenar donantes, suscripciones y eventos de Wompi.
-- Simulación local de tokenización para demos mientras se integra la pasarela real.
+- Widget real de Wompi para tarjeta y Nequi (con firma de integridad).
 - Tailwind CSS, componentes reutilizables y pruebas básicas con Vitest.
 
 ## Requisitos previos
@@ -24,13 +24,13 @@ Debe ser completamente funcional y gratis el flujo final.
 1. **Instalar dependencias**
 
 ```powershell
-cd "d:\Visual Studio Code\mini-app_hablemospor ellos"
+cd "d:\Visual Studio Code\HablemosPorEllos\mini-app-prod\Hablemos_por_ellos_cobros"
 npm install
 ```
 
 2. **Variables de entorno**
-   - Copia `.env.example` a `.env.local` y completa `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`.
-   - Añade tus llaves públicas/privadas de Wompi cuando hagas la integración real (por ejemplo `NEXT_PUBLIC_WOMPI_PUBLIC_KEY`).
+   - Copia `.env.example` a `.env.local` y completa las credenciales necesarias de Supabase y pasarela de pagos.
+   - Nunca comitees `.env.local` al repositorio.
 
 3. **Comandos útiles**
 
@@ -45,25 +45,24 @@ npm start        # modo producción después de build
 ## Arquitectura
 
 - `src/app/donar/page.tsx` renderiza `DonationWizard`, cabecera emocional y hero card.
-- `DonationWizard` controla estado de pasos y comunicación con `/api/donations`.
+- `DonationWizard` controla estado de pasos y comunicación con la API.
 - Componentes UI (`Button`, `AmountChip`, `Toast`, etc.) viven en `src/components/ui`.
-- `src/app/api/donations/route.ts` y `src/lib/supabase-server.ts` gestionan la persistencia en Supabase (`donors`, `subscriptions`, `webhook_events`).
-- `src/app/api/wompi/webhook/route.ts` deja listo el endpoint para conectar los webhooks de Wompi.
-- `src/lib/wompi.ts` contiene utilidades y simulación de tokenización para entornos locales.
+- Integración con Supabase para almacenar donantes, suscripciones y eventos.
+- Integración con pasarela de pagos para procesamiento seguro de transacciones.
 
-## Integración con Wompi
+## Integración con Pasarela de Pagos
 
-1. Carga el script oficial (`https://checkout.wompi.co/widget.js`) dentro de `PaymentStep` y reemplaza el bloque de placeholder por el widget real.
+1. Configura el widget de pago en `PaymentStep` según la documentación de tu proveedor.
 2. Usa la información del donante (nombre, correo, documento, monto) para inicializar el widget.
-3. En el callback `onSuccess`, envía `payment_method_type`, `payment_source_id` y `token` al endpoint `/api/donations` (ya preparado para recibirlos).
-4. Configura los webhooks de Wompi apuntando a `/api/wompi/webhook` para actualizar estados de `payments`/`subscriptions`.
+3. En el callback de éxito, envía los datos de tokenización a tu backend.
+4. Configura webhooks para actualizar estados de pagos y suscripciones.
 
-## Modelo de datos sugerido en Supabase
+## Modelo de datos en Supabase
 
-- `donors`: email único, nombres, teléfono, documento, ciudad, preferencias de comunicación.
-- `subscriptions`: FK a `donors`, monto, frecuencia, estado, referencia Wompi, método de pago, fechas de inicio/renovación.
-- `payments`: registros por cobro mensual (opcional) sincronizados por webhook.
-- `webhook_events`: bitácora de eventos crudos de Wompi para auditoría.
+- `donors`: información básica de donantes
+- `subscriptions`: detalles de suscripciones mensuales/únicas
+- `payments`: historial de transacciones
+- `webhook_events`: bitácora de eventos para auditoría
 
 ### Baja de suscripciones (versión actual)
 
@@ -74,7 +73,11 @@ En esta primera versión, **la cancelación de donaciones mensuales se gestiona 
 - Opcionalmente se registra la acción en una tabla de auditoría o en `payments`.
 - La lógica de cobro recurrente (cron/función externa) **debe ignorar suscripciones con estado cancelado**, por lo que no se siguen intentando cobros.
 
-> Importante: el token/método de pago que devuelve Wompi puede permanecer almacenado solo para fines de historial/auditoría; simplemente deja de utilizarse una vez que la suscripción está cancelada.
+> Importante: los tokens de pago pueden permanecer almacenados para fines de historial/auditoría; simplemente dejan de utilizarse una vez que la suscripción está cancelada.
+
+## Seguridad del Webhook
+
+El endpoint de webhooks incluye validaciones de seguridad estándar para pasarelas de pago.
 
 ## Embed en Wix
 
@@ -83,7 +86,7 @@ En esta primera versión, **la cancelación de donaciones mensuales se gestiona 
 
 ## Próximos pasos sugeridos
 
-1. Sustituir la simulación de Wompi en `PaymentStep` por el widget real.
-2. Conectar Supabase con sus tablas definitivas y politicas RLS.
-3. Añadir analytics/eventos (Meta Pixel, GA4) según las necesidades de la fundación.
-4. Automatizar correos de confirmación usando la información retornada por Supabase/Wompi.
+1. Configurar credenciales de producción para pasarela de pagos y base de datos.
+2. Implementar políticas de seguridad (RLS) en Supabase.
+3. Añadir analytics/eventos según las necesidades de la fundación.
+4. Automatizar correos de confirmación y recibos.

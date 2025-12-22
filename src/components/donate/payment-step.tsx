@@ -29,7 +29,7 @@ interface PaymentStepProps {
   paymentMethod: "card" | "nequi";
   onMethodChange: (method: "card" | "nequi") => void;
   onBack: () => void;
-  onAuthorized: (wompiData: { token: string; maskedDetails: string; reference: string }) => Promise<void> | void;
+  onAuthorized: (wompiData: { token: string; paymentSourceId?: string; maskedDetails: string; reference: string }) => Promise<void> | void;
   loading?: boolean;
 }
 
@@ -105,6 +105,12 @@ export function PaymentStep({
   const [integritySignature, setIntegritySignature] = useState<string | null>(null);
   const [currentReference, setCurrentReference] = useState<string | null>(null);
   const [isSignatureLoading, setIsSignatureLoading] = useState(false);
+
+  useEffect(() => {
+    if (isRecurring && paymentMethod === "nequi") {
+      onMethodChange("card");
+    }
+  }, [isRecurring, paymentMethod, onMethodChange]);
 
   const canOpenCheckout =
     isWidgetLoaded && !!integritySignature && !!currentReference && !isProcessing && !isSignatureLoading;
@@ -257,6 +263,7 @@ export function PaymentStep({
       });
 
       checkout.open((result: WidgetCheckoutResult) => {
+        // console.log("Wompi widget result:", result);
         window.clearTimeout(timeoutId);
         window.clearTimeout(longTimeoutId);
         cleanupWompiOverlayDom();
@@ -277,12 +284,20 @@ export function PaymentStep({
           (paymentInfo as any)?.extra?.payment_source_id ??
           (paymentInfo as any)?.extra?.token ??
           (tx as any)?.payment_source_id ??
-          tx.id ??
           null;
 
-        if (!paymentSourceId) {
-          setWompiError("No recibimos el payment_source_id de Wompi. No podemos guardar la suscripci?n.");
+        const transactionId = (tx as any)?.id ?? null;
+
+        if (!paymentSourceId && isRecurring) {
+          setWompiError("Nequi no permite cobro mensual automático. Cambia a tarjeta o desactiva el cobro mensual.");
           console.warn("Wompi sin payment_source_id", { transaction: tx, paymentInfo });
+          return;
+        }
+
+        const wompiToken = transactionId ?? paymentSourceId;
+        if (!wompiToken) {
+          setWompiError("No recibimos confirmación de Wompi. Intenta de nuevo.");
+          console.warn("Wompi sin transaction id", { transaction: tx, paymentInfo });
           return;
         }
         
@@ -297,13 +312,15 @@ export function PaymentStep({
           }
 
           onAuthorized({
-            token: paymentSourceId,
+            token: wompiToken,
+            paymentSourceId: paymentSourceId ?? undefined,
             reference: currentReference ?? "",
             maskedDetails,
           });
         } else if (tx.status === "PENDING") {
           onAuthorized({
-            token: paymentSourceId,
+            token: wompiToken,
+            paymentSourceId: paymentSourceId ?? undefined,
             reference: currentReference ?? "",
             maskedDetails: "Pago pendiente de confirmación",
           });
@@ -320,7 +337,7 @@ export function PaymentStep({
       setWompiError("Error al abrir el checkout de Wompi.");
       console.error("Wompi checkout error:", error);
     }
-  }, [isWidgetLoaded, amount, donor, onAuthorized, integritySignature, currentReference, fetchSignature]);
+  }, [isWidgetLoaded, amount, donor, isRecurring, onAuthorized, integritySignature, currentReference, fetchSignature]);
 
   return (
     <section className="grid gap-6">
@@ -348,22 +365,27 @@ export function PaymentStep({
           <p className="text-sm text-slate-500">Solo lo harás una vez. Wompi guardará tu medio de pago con total seguridad.</p>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          {methodOptions.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => onMethodChange(option.id)}
-              className={`flex flex-col gap-2 rounded-3xl border p-4 text-left transition ${
-                paymentMethod === option.id
-                  ? "border-foundation-blue bg-foundation-blue/10"
-                  : "border-slate-200 bg-white hover:border-foundation-blue/50"
-              }`}
-            >
-              <span className="text-3xl">{option.icon}</span>
-              <p className="text-lg font-semibold text-slate-900">{option.title}</p>
-              <p className="text-sm text-slate-500">{option.description}</p>
-            </button>
-          ))}
+          {methodOptions.map((option) => {
+            const isDisabled = isRecurring && option.id === "nequi";
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => onMethodChange(option.id)}
+                disabled={isDisabled}
+                title={isDisabled ? "Nequi no está disponible para cobro mensual automático." : undefined}
+                className={`flex flex-col gap-2 rounded-3xl border p-4 text-left transition ${
+                  paymentMethod === option.id
+                    ? "border-foundation-blue bg-foundation-blue/10"
+                    : "border-slate-200 bg-white hover:border-foundation-blue/50"
+                } ${isDisabled ? "cursor-not-allowed opacity-50 hover:border-slate-200" : ""}`}
+              >
+                <span className="text-3xl">{option.icon}</span>
+                <p className="text-lg font-semibold text-slate-900">{option.title}</p>
+                <p className="text-sm text-slate-500">{option.description}</p>
+              </button>
+            );
+          })}
         </div>
 
         {/* Wompi Payment Button */}

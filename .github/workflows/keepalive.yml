@@ -1,0 +1,17 @@
+name: Keepalive
+
+on:
+  schedule:
+    # 03:00 UTC cada 3 días
+    - cron: "0 3 */3 * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call keepalive endpoint
+        run: |
+          curl -fsSL \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.KEEPALIVE_URL }}"
