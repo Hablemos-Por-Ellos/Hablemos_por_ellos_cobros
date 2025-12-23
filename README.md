@@ -82,3 +82,4 @@ El endpoint de webhooks incluye validaciones de seguridad estándar para pasarel
 ## Embed en Wix
 
 - Publica este mini-app (por ejemplo en Vercel) y embebe `https://tu-dominio/donar` mediante iframe.
+
