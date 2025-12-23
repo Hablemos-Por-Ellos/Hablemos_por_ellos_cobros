@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import { subscriptionPayloadSchema } from "@/lib/schemas";
 import { getServiceSupabaseClient } from "@/lib/supabase-server";
 
+function addOneMonthKeepingDay(base: Date) {
+  const targetDay = base.getDate();
+  const candidate = new Date(base);
+  candidate.setMonth(candidate.getMonth() + 1, 1);
+  const daysInTargetMonth = new Date(candidate.getFullYear(), candidate.getMonth() + 1, 0).getDate();
+  candidate.setDate(Math.min(targetDay, daysInTargetMonth));
+  return candidate;
+}
+
 export async function POST(request: Request) {
   const raw = await request.json().catch(() => null);
 
@@ -13,14 +22,31 @@ export async function POST(request: Request) {
   const { stage, donor, amount, paymentMethod, wompi } = parsed.data;
   const isRecurring = donor.isRecurring ?? true;
   const supabase = getServiceSupabaseClient();
+  const allowDemo = (process.env.ALLOW_DEMO_MODE === "true") || (process.env.NODE_ENV !== "production");
 
   if (!supabase) {
+    if (allowDemo) {
+      return NextResponse.json(
+        {
+          message: "Modo demostración activo: configura SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY para persistir datos.",
+          status: stage === "draft" ? "draft_saved" : "subscription_created",
+        },
+        { status: 200 }
+      );
+    }
     return NextResponse.json(
-      {
-        message: "Modo demostración: configura SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY para guardar en base de datos.",
-        status: stage === "draft" ? "draft_saved" : "subscription_created",
-      },
-      { status: 200 }
+      { message: "Configuración inválida en producción: falta SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY" },
+      { status: 500 }
+    );
+  }
+
+  const wompiToken = wompi?.token ?? null;
+  const paymentSourceId = wompi?.paymentSourceId ?? (isRecurring ? wompiToken : null);
+
+  if (stage === "confirm" && isRecurring && !paymentSourceId) {
+    return NextResponse.json(
+      { message: "Falta payment_source_id para cobro mensual." },
+      { status: 400 }
     );
   }
 
@@ -64,9 +90,10 @@ export async function POST(request: Request) {
       frequency: isRecurring ? "monthly" : "one_time",
       status: "active",
       payment_method_type: paymentMethod,
-      wompi_payment_source_id: wompi?.paymentSourceId ?? wompi?.token ?? null,
+      wompi_payment_source_id: paymentSourceId,
       wompi_masked_details: wompi?.maskedDetails ?? null,
       reference,
+      next_payment_date: isRecurring ? addOneMonthKeepingDay(new Date()).toISOString() : null,
     })
     .select()
     .single();
@@ -76,7 +103,7 @@ export async function POST(request: Request) {
   }
 
   // Crear registro inicial en payments cuando se confirma la donación
-  const wompiTransactionId = wompi?.token ?? wompi?.paymentSourceId ?? null;
+  const wompiTransactionId = wompiToken ?? paymentSourceId ?? null;
   if (wompiTransactionId) {
     const { error: paymentError } = await supabase.from("payments").insert({
       subscription_id: subscription.id,

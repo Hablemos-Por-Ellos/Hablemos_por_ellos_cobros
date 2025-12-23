@@ -6,7 +6,11 @@ out
 .env
 .env.local
 coverage
-/.github
+/.github/*
+!/.github/workflows/
+!/.github/workflows/**
 TODO_PROD.md
 PASOS_A_SEGUIR_*.md
 PASOS_A_SEGUIR_LEGACY.md
+CONFIGURAR_KEEPALIVE.md
+tsconfig.tsbuildinfo

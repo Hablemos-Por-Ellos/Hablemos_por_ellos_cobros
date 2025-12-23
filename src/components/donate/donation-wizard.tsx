@@ -87,7 +87,9 @@ export function DonationWizard() {
     }
   };
 
-  const handlePaymentAuthorized = async (wompiData: { token: string; maskedDetails: string; reference: string }) => {
+  const handlePaymentAuthorized = async (
+    wompiData: { token: string; paymentSourceId?: string; maskedDetails: string; reference: string }
+  ) => {
     try {
       setIsLoading(true);
       if (!wompiData?.token) {
@@ -97,7 +99,7 @@ export function DonationWizard() {
       const result = await persistDonation("confirm", undefined, {
         wompi: {
           token: paymentData.token,
-          paymentSourceId: paymentData.token,
+          paymentSourceId: paymentData.paymentSourceId,
           reference: paymentData.reference,
           maskedDetails: paymentData.maskedDetails,
         },

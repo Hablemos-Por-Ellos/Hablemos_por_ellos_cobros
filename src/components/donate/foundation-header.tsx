@@ -9,7 +9,7 @@ export function FoundationHeader() {
         <p className="text-sm uppercase tracking-[0.3em] text-foundation-green sm:text-base">Programa de donación</p>
         <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl lg:text-5xl">Salva vidas con una donación</h1>
         <p className="mt-2 max-w-3xl text-base text-slate-600 sm:text-lg">
-          Garantiza alimento, rescate y atención veterinaria para perros y gatos.
+          Garantiza alimento, rescate y atención veterinaria para perros, gatos y otros peluditos.
         </p>
       </div>
     </header>
