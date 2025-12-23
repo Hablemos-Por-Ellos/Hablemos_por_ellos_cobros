@@ -82,11 +82,3 @@ El endpoint de webhooks incluye validaciones de seguridad estándar para pasarel
 ## Embed en Wix
 
 - Publica este mini-app (por ejemplo en Vercel) y embebe `https://tu-dominio/donar` mediante iframe.
-- Usa parámetros de consulta (`?monto=50000&campana=navidad`) para precargar montos o trackear campañas.
-
-## Próximos pasos sugeridos
-
-1. Configurar credenciales de producción para pasarela de pagos y base de datos.
-2. Implementar políticas de seguridad (RLS) en Supabase.
-3. Añadir analytics/eventos según las necesidades de la fundación.
-4. Automatizar correos de confirmación y recibos.
