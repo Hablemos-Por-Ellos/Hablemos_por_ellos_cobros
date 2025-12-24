@@ -8,6 +8,7 @@ on:
 
 jobs:
   ping:
+    environment: production
     runs-on: ubuntu-latest
     steps:
       - name: Call keepalive endpoint
