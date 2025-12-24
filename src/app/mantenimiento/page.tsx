@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 
 export const metadata: Metadata = {
   title: "Sitio en mantenimiento | Hablemos por Ellos",
@@ -9,10 +10,13 @@ export default function MaintenancePage() {
     <main className="flex min-h-screen items-center justify-center px-4 py-16">
       <div className="max-w-xl rounded-3xl bg-white/90 p-10 text-center shadow-card">
         <div className="mb-4 flex items-center justify-center gap-2">
-          <img
+          <Image
             src="/hpe-logo.png"
             alt="Hablemos por Ellos"
+            width={64}
+            height={64}
             className="h-12 w-12"
+            priority
           />
         </div>
         <p className="text-sm uppercase tracking-[0.3em] text-foundation-green">Hablemos por Ellos</p>

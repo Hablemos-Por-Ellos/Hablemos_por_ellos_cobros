@@ -1,9 +1,20 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export default function HomePage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-16">
       <div className="max-w-2xl rounded-3xl bg-white/80 p-10 text-center shadow-card">
+        <div className="mb-4 flex items-center justify-center">
+          <Image
+            src="/hpe-logo.png"
+            alt="Hablemos por Ellos"
+            width={64}
+            height={64}
+            className="h-12 w-12"
+            priority
+          />
+        </div>
         <p className="text-sm uppercase tracking-[0.3em] text-foundation-green">Hablemos por Ellos</p>
         <h1 className="mt-4 text-3xl font-semibold text-slate-900">
           Donaciones
