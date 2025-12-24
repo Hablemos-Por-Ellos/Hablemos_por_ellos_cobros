@@ -1,6 +1,9 @@
 const maintenanceEnabled = process.env.MAINTENANCE_MODE === "true";
 
 const nextConfig = {
+  images: {
+    unoptimized: true,
+  },
   async redirects() {
     if (!maintenanceEnabled) {
       return [];
