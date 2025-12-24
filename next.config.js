@@ -11,7 +11,7 @@ const nextConfig = {
 
     return [
       {
-        source: "/((?!api|_next|mantenimiento|favicon.ico|robots.txt|sitemap.xml).*)",
+        source: "/((?!api|_next|mantenimiento|favicon.ico|robots.txt|sitemap.xml|.*\\..*).*)",
         destination: "/mantenimiento",
         permanent: false,
       },
