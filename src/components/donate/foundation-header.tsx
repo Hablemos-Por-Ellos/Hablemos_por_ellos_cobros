@@ -1,12 +1,10 @@
+import Image from "next/image";
+
 export function FoundationHeader() {
   return (
     <header className="flex flex-col items-center gap-3 text-center sm:gap-4">
       <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-4 py-2 text-sm font-medium text-foundation-blue shadow-sm">
-        <img
-          src="/hpe-logo.png"
-          alt="Hablemos por Ellos"
-          className="h-6 w-6"
-        />
+        <LogoMark />
         <span>Fundación Hablemos por Ellos</span>
         <span className="text-base" aria-hidden="true">🐾</span>
       </div>
@@ -18,5 +16,17 @@ export function FoundationHeader() {
         </p>
       </div>
     </header>
+  );
+}
+
+function LogoMark() {
+  return (
+    <Image
+      src="/hpe-logo.png"
+      alt="Hablemos por Ellos"
+      width={24}
+      height={24}
+      className="h-6 w-6"
+    />
   );
 }

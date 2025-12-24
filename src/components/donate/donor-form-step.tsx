@@ -155,12 +155,12 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
             <span className="leading-snug">Tu aporte se transforma en alimento, rescates y atención veterinaria.</span>
           </div>
         </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-foundation-blue/20 bg-foundation-cream px-4 py-3">
+        <div className="flex items-center gap-3 rounded-2xl border border-foundation-warm/45 bg-foundation-warm/10 px-4 py-3 ring-1 ring-foundation-warm/25">
           <input
             id="isRecurring"
             name="isRecurring"
             type="checkbox"
-            className="h-5 w-5 rounded border-slate-300 text-foundation-blue focus:ring-foundation-blue"
+            className="h-5 w-5 rounded border-slate-300 text-foundation-warm focus:ring-foundation-warm"
             checked={values.isRecurring}
             onChange={(event) => handleFieldChange("isRecurring", event.target.checked)}
           />
@@ -169,7 +169,7 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
               Activar cobro mensual automático
             </label>
             <p className="text-sm text-slate-600">Desmarca si solo quieres un cobro único.</p>
-            <div className="mt-2 flex items-start gap-2 rounded-2xl border border-foundation-warm/30 bg-foundation-warm/15 px-3 py-2 text-sm text-slate-800">
+            <div className="mt-2 flex items-start gap-2 rounded-2xl border border-foundation-warm/70 bg-foundation-warm/25 px-3 py-2 text-sm text-slate-900">
               <span role="img" aria-label="Alerta" className="text-base text-foundation-warm">
                 ⚠️
               </span>
