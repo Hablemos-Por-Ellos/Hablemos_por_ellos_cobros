@@ -2,8 +2,13 @@ export function FoundationHeader() {
   return (
     <header className="flex flex-col items-center gap-3 text-center sm:gap-4">
       <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-4 py-2 text-sm font-medium text-foundation-blue shadow-sm">
-        <span className="text-xl">🐾</span>
+        <img
+          src="/hpe-logo.png"
+          alt="Hablemos por Ellos"
+          className="h-6 w-6"
+        />
         <span>Fundación Hablemos por Ellos</span>
+        <span className="text-base" aria-hidden="true">🐾</span>
       </div>
       <div>
         <p className="text-sm uppercase tracking-[0.3em] text-foundation-green sm:text-base">Programa de donación</p>
