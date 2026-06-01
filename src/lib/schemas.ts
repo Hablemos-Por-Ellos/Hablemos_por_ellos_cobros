@@ -29,7 +29,7 @@ export const paymentAuthorizationSchema = z.object({
 export type PaymentAuthorization = z.infer<typeof paymentAuthorizationSchema>;
 
 export const subscriptionPayloadSchema = z.object({
-  stage: z.enum(["draft", "confirm"]),
+  stage: z.enum(["draft", "checkout", "confirm"]),
   donor: donorFormSchema.omit({ amount: true }),
   amount: z.number().positive("El monto debe ser mayor a 0"),
   paymentMethod: z.enum(["card", "nequi"]).optional(),
@@ -37,9 +37,14 @@ export const subscriptionPayloadSchema = z.object({
   wompi: z
     .object({
       token: z.string().optional(), // payment source id/token
+      cardToken: z.string().optional(),
+      paymentSourceType: z.string().optional(),
       paymentSourceId: z.string().optional(),
+      transactionId: z.string().optional(),
       reference: z.string().optional(),
       maskedDetails: z.string().optional(),
+      acceptanceToken: z.string().optional(),
+      acceptPersonalAuth: z.string().optional(),
     })
     .optional(),
 });

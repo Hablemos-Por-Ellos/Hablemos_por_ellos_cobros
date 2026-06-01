@@ -24,6 +24,18 @@ const INITIAL_DONOR: DonorFormValues = {
 };
 
 type Step = 1 | 2 | 3;
+type DonationStage = "draft" | "checkout" | "confirm";
+type WompiAuthorizationData = {
+  token: string;
+  cardToken?: string;
+  paymentSourceType?: string;
+  paymentSourceId?: string;
+  transactionId?: string;
+  maskedDetails: string;
+  reference: string;
+  acceptanceToken?: string;
+  acceptPersonalAuth?: string;
+};
 
 export function DonationWizard() {
   const [step, setStep] = useState<Step>(1);
@@ -42,7 +54,7 @@ export function DonationWizard() {
 
   const persistDonation = useCallback(
     async (
-      stage: "draft" | "confirm",
+      stage: DonationStage,
       overrides?: Partial<{ donor: DonorFormValues; amount: number; paymentMethod: "card" | "nequi" }>,
       extra?: Record<string, unknown>
     ) => {
@@ -88,7 +100,7 @@ export function DonationWizard() {
   };
 
   const handlePaymentAuthorized = async (
-    wompiData: { token: string; paymentSourceId?: string; maskedDetails: string; reference: string }
+    wompiData: WompiAuthorizationData
   ) => {
     try {
       setIsLoading(true);
@@ -99,9 +111,14 @@ export function DonationWizard() {
       const result = await persistDonation("confirm", undefined, {
         wompi: {
           token: paymentData.token,
+          cardToken: paymentData.cardToken,
+          paymentSourceType: paymentData.paymentSourceType,
           paymentSourceId: paymentData.paymentSourceId,
+          transactionId: paymentData.transactionId,
           reference: paymentData.reference,
           maskedDetails: paymentData.maskedDetails,
+          acceptanceToken: paymentData.acceptanceToken,
+          acceptPersonalAuth: paymentData.acceptPersonalAuth,
         },
       });
       setPaymentSummary(paymentData.maskedDetails);
@@ -113,6 +130,12 @@ export function DonationWizard() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleCheckoutStarted = async ({ reference }: { reference: string }) => {
+    await persistDonation("checkout", undefined, {
+      wompi: { reference },
+    });
   };
 
   const resetFlow = () => {
@@ -136,6 +159,7 @@ export function DonationWizard() {
           paymentMethod={paymentMethod}
           onMethodChange={setPaymentMethod}
           onBack={() => setStep(1)}
+          onCheckoutStarted={handleCheckoutStarted}
           onAuthorized={handlePaymentAuthorized}
           loading={isLoading}
         />
