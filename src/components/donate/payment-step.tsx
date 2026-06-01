@@ -590,11 +590,21 @@ export function PaymentStep({
                   <p className="font-semibold">Pago 100% seguro con Wompi</p>
                 </div>
                 <p className="text-sm text-slate-600 max-w-md">
-                  Al hacer clic en el botón, se abrirá una ventana segura de Wompi donde podrás 
-                  {paymentMethod === "card" 
-                    ? " ingresar los datos de tu tarjeta" 
-                    : " autorizar el pago desde tu cuenta Nequi"
-                  }.
+                  {isRecurring && paymentMethod === "card" ? (
+                    <>
+                      Se abrirá Wompi para registrar tu tarjeta de forma segura. En esa ventana,
+                      selecciona <span className="font-semibold text-slate-900">Tarjeta débito o crédito</span>;
+                      esa opción está activa.
+                    </>
+                  ) : (
+                    <>
+                      Al hacer clic en el botón, se abrirá una ventana segura de Wompi donde podrás
+                      {paymentMethod === "card"
+                        ? " ingresar los datos de tu tarjeta"
+                        : " autorizar el pago desde tu cuenta Nequi"}
+                      .
+                    </>
+                  )}
                 </p>
                 <Button
                   type="button"
@@ -608,7 +618,7 @@ export function PaymentStep({
                     : isProcessing
                       ? "Procesando..."
                       : isRecurring
-                        ? `Guardar tarjeta y donar ${formatCurrencyCOP(amount)}`
+                        ? `Registrar tarjeta y donar ${formatCurrencyCOP(amount)}`
                         : `Pagar ${formatCurrencyCOP(amount)}`}
                 </Button>
                 {isTakingLong && (
