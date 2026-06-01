@@ -303,25 +303,24 @@ export function PaymentStep({
     setIsTakingLong(false);
     setWompiError(null);
 
-    // Show "taking long" message after 15s
+    // Show a soft waiting message only while we prepare the Wompi widget.
     const longTimeoutId = window.setTimeout(() => {
       setIsTakingLong(true);
     }, 15000);
 
-    // Full timeout at 30s
-    const timeoutId = window.setTimeout(() => {
-      setIsProcessing(false);
+    const clearWaitingState = () => {
+      window.clearTimeout(longTimeoutId);
       setIsTakingLong(false);
-      cleanupWompiOverlayDom();
-      setWompiError("El proceso tardó demasiado. Por favor, intenta de nuevo.");
-    }, 30000);
+    };
+
+    const markWompiOpened = () => {
+      clearWaitingState();
+    };
 
     const finishProcessing = () => {
-      window.clearTimeout(timeoutId);
-      window.clearTimeout(longTimeoutId);
+      clearWaitingState();
       cleanupWompiOverlayDom();
       setIsProcessing(false);
-      setIsTakingLong(false);
     };
 
     try {
@@ -335,6 +334,7 @@ export function PaymentStep({
           publicKey,
         });
 
+        markWompiOpened();
         checkout.open((result: WidgetCheckoutResult) => {
           finishProcessing();
           fetchSignature();
@@ -382,6 +382,7 @@ export function PaymentStep({
         },
       });
 
+      markWompiOpened();
       checkout.open((result: WidgetCheckoutResult) => {
         // console.log("Wompi widget result:", result);
         finishProcessing();
@@ -594,7 +595,7 @@ export function PaymentStep({
                     <>
                       Se abrirá Wompi para registrar tu tarjeta de forma segura. En esa ventana,
                       selecciona <span className="font-semibold text-slate-900">Tarjeta débito o crédito</span>;
-                      esa opción está activa.
+                      puede verse en gris por diseño de Wompi, pero está activa.
                     </>
                   ) : (
                     <>
