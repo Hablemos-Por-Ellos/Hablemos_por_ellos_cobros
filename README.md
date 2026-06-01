@@ -1,85 +1,191 @@
-# Mini-app Donaciones Mensuales · Fundación Hablemos por Ellos
+# Hablemos por Ellos Cobros
 
-Mini-aplicación web moderna, emocional y confiable para gestionar suscripciones de donación mensual. Está pensada para incrustarse en un sitio principal (por ejemplo Wix) como módulo independiente que guía al donante desde la captura de datos hasta la autorización segura con Wompi y persiste la suscripción en Supabase.
-Debe ser completamente funcional y gratis el flujo final.
+Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app permite registrar donantes, tokenizar tarjetas con Wompi y cobrar donaciones mensuales sin guardar datos sensibles de tarjeta en este repositorio ni en Supabase.
 
-## Características principales
+## Estado actual
 
-- Flujo `/donar` en tres pasos (datos → pago seguro → confirmación).
-- UI tierna y minimalista con mensajes de transparencia, indicadores de seguridad y componentes optimizados para conversión.
-- Selección de montos predefinidos (2.5k, 5k, 10k, 20k, 50k, 100k COP) + monto personalizado.
-- Espacio visual y lógica preparada para incrustar el widget oficial de Wompi (tarjeta y Nequi).
-- API Routes con Supabase para almacenar donantes, suscripciones y eventos de Wompi.
-- Widget real de Wompi para tarjeta y Nequi (con firma de integridad).
-- Tailwind CSS, componentes reutilizables y pruebas básicas con Vitest.
+- Ruta publica principal: `/donar`.
+- Version visible en el footer: tomada desde `package.json`.
+- Pagos mensuales: tarjeta debito/credito con tokenizacion Wompi.
+- Nequi mensual: deshabilitado por ahora.
+- Persistencia: Supabase.
+- Deploy esperado: Vercel.
+- Cobros recurrentes: GitHub Actions `Monthly Charges`.
+- Keepalive Supabase: GitHub Actions `Keepalive`.
 
-## Requisitos previos
+## Seguridad
 
-- Node.js 18.18+ o 20.x.
-- npm 9+.
-- Cuenta Supabase (para persistencia real) y credenciales Wompi producción/sandbox.
+Este repositorio es publico. No se deben commitear secretos, dumps de base de datos, backups de Supabase, archivos `.env*` reales ni capturas con llaves visibles.
 
-## Configuración rápida
+La app no guarda numero de tarjeta, CVV ni datos completos del medio de pago. Wompi guarda la informacion sensible. En Supabase solo se guardan identificadores operativos como:
 
-1. **Instalar dependencias**
+- `wompi_payment_source_id`
+- `wompi_transaction_id`
+- estado del pago/suscripcion
+- datos enmascarados cuando Wompi los entrega
+
+Los secrets deben vivir en Vercel y en GitHub Actions Environments, no en el codigo.
+
+## Stack
+
+- Next.js 14 App Router
+- React 18
+- Tailwind CSS
+- Supabase JS
+- Wompi Colombia
+- Vitest
+- GitHub Actions
+
+## Instalacion local
 
 ```powershell
-cd "d:\Visual Studio Code\HablemosPorEllos\mini-app-prod\Hablemos_por_ellos_cobros"
 npm install
 ```
 
-2. **Variables de entorno**
-   - Copia `.env.example` a `.env.local` y completa las credenciales necesarias de Supabase y pasarela de pagos.
-   - Nunca comitees `.env.local` al repositorio.
-
-3. **Comandos útiles**
+Copia `.env.example` a `.env.local` y completa valores reales solo en tu maquina:
 
 ```powershell
-npm run dev      # servidor Next.js en modo desarrollo
-npm run lint     # reglas ESLint/Next
-npm run test     # pruebas unitarias con Vitest
-npm run build    # compilación de producción
-npm start        # modo producción después de build
+Copy-Item .env.example .env.local
 ```
 
-## Arquitectura
+Comandos utiles:
 
-- `src/app/donar/page.tsx` renderiza `DonationWizard`, cabecera emocional y hero card.
-- `DonationWizard` controla estado de pasos y comunicación con la API.
-- Componentes UI (`Button`, `AmountChip`, `Toast`, etc.) viven en `src/components/ui`.
-- Integración con Supabase para almacenar donantes, suscripciones y eventos.
-- Integración con pasarela de pagos para procesamiento seguro de transacciones.
+```powershell
+npm run dev
+npm run lint
+npm test
+npm run build
+npm start
+```
 
-## Integración con Pasarela de Pagos
+## Variables de entorno
 
-1. Configura el widget de pago en `PaymentStep` según la documentación de tu proveedor.
-2. Usa la información del donante (nombre, correo, documento, monto) para inicializar el widget.
-3. En el callback de éxito, envía los datos de tokenización a tu backend.
-4. Configura webhooks para actualizar estados de pagos y suscripciones.
+Variables principales para Vercel:
 
-## Modelo de datos en Supabase
+```txt
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+NEXT_PUBLIC_WOMPI_ENV
+NEXT_PUBLIC_WOMPI_PUBLIC_KEY_PROD
+WOMPI_PRIVATE_KEY_PROD
+WOMPI_INTEGRITY_SECRET_PROD
+WOMPI_EVENTS_SECRET_PROD
+CRON_SECRET
+MAINTENANCE_MODE
+ALLOW_DEMO_MODE
+```
 
-- `donors`: información básica de donantes
-- `subscriptions`: detalles de suscripciones mensuales/únicas
-- `payments`: historial de transacciones
-- `webhook_events`: bitácora de eventos para auditoría
+Variables principales para GitHub Actions, environment `Production`:
 
-### Baja de suscripciones (versión actual)
+```txt
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+NEXT_PUBLIC_WOMPI_PUBLIC_KEY_PROD
+WOMPI_PRIVATE_KEY_PROD
+WOMPI_INTEGRITY_SECRET_PROD
+CRON_SECRET
+KEEPALIVE_URL
+```
 
-En esta primera versión, **la cancelación de donaciones mensuales se gestiona de forma manual por la fundación**. El flujo recomendado es:
+Notas:
 
-- El donante escribe a un canal de soporte (correo, WhatsApp, redes) solicitando la cancelación.
-- Un responsable interno ingresa a Supabase y marca la suscripción como cancelada en la tabla `subscriptions` (por ejemplo, cambiando `status` a `"canceled"` y llenando `cancelled_at`).
-- Opcionalmente se registra la acción en una tabla de auditoría o en `payments`.
-- La lógica de cobro recurrente (cron/función externa) **debe ignorar suscripciones con estado cancelado**, por lo que no se siguen intentando cobros.
+- `NEXT_PUBLIC_WOMPI_PUBLIC_KEY_PROD` puede estar expuesta al navegador porque es la llave publica de Wompi.
+- `WOMPI_PRIVATE_KEY_PROD`, `WOMPI_INTEGRITY_SECRET_PROD`, `WOMPI_EVENTS_SECRET_PROD`, `SUPABASE_SERVICE_ROLE_KEY` y `CRON_SECRET` nunca deben tener prefijo `NEXT_PUBLIC_`.
+- `NEXT_PUBLIC_WOMPI_ENV=prod` activa el modo produccion en la app web.
+- El workflow mensual fija `WOMPI_ENV=prod` directamente.
 
-> Importante: los tokens de pago pueden permanecer almacenados para fines de historial/auditoría; simplemente dejan de utilizarse una vez que la suscripción está cancelada.
+## Flujo de donacion
 
-## Seguridad del Webhook
+1. El donante llena sus datos en `/donar`.
+2. La app crea/actualiza el donante en Supabase.
+3. Antes de abrir Wompi, la app crea una suscripcion `pending` con una `reference`.
+4. El widget de Wompi tokeniza la tarjeta y devuelve un `cardToken`.
+5. El backend pide tokens de aceptacion frescos a Wompi.
+6. El backend crea una fuente de pago en Wompi (`payment_source_id`).
+7. El backend crea el primer cobro.
+8. Supabase guarda la suscripcion, el pago y los IDs operativos.
+9. El webhook de Wompi confirma estados y registra eventos.
 
-El endpoint de webhooks incluye validaciones de seguridad estándar para pasarelas de pago.
+## Cobros recurrentes
 
-## Embed en Wix
+El workflow `.github/workflows/monthly-charges.yml` corre una vez al dia:
 
-- Publica este mini-app (por ejemplo en Vercel) y embebe `https://tu-dominio/donar` mediante iframe.
+```txt
+7:00 a.m. Colombia
+12:00 UTC
+```
 
+El script `scripts/run-monthly-charges.mjs` busca suscripciones:
+
+- `status = active`
+- `frequency = monthly`
+- `wompi_payment_source_id` no nulo
+- `next_payment_date <= now()`
+
+Si encuentra una suscripcion vencida, crea una transaccion en Wompi con la fuente de pago guardada. El script evita duplicar cobros si ya existe un pago `approved` o `pending` en el mes actual.
+
+Para ejecutar manualmente desde GitHub:
+
+1. Actions
+2. Monthly Charges
+3. Run workflow
+4. Branch `main`
+
+## Keepalive
+
+El workflow `.github/workflows/keepalive.yml` llama el endpoint `/api/cron/keepalive` cada 3 dias. Usa:
+
+```txt
+CRON_SECRET
+KEEPALIVE_URL
+```
+
+`KEEPALIVE_URL` debe apuntar al endpoint desplegado, por ejemplo:
+
+```txt
+https://TU_DOMINIO/api/cron/keepalive
+```
+
+## Webhook Wompi
+
+Configura el webhook de Wompi apuntando a:
+
+```txt
+https://TU_DOMINIO/api/wompi/webhook
+```
+
+El endpoint valida la firma del evento con `WOMPI_EVENTS_SECRET_PROD` y guarda una version sanitizada del evento en `webhook_events`.
+
+## Tablas esperadas
+
+- `donors`
+- `subscriptions`
+- `payments`
+- `webhook_events`
+- `audit_logs`
+
+Para cancelar una suscripcion manualmente:
+
+```sql
+update public.subscriptions
+set status = 'cancelled',
+    cancelled_at = now(),
+    next_payment_date = null
+where id = 'ID_DE_LA_SUSCRIPCION';
+```
+
+El cron de cobros solo procesa suscripciones `active`.
+
+## Checklist antes de publicar cambios
+
+```powershell
+npm run lint
+npm test
+npm run build
+```
+
+Antes de hacer push a un repo publico:
+
+- Verifica `git status --short`.
+- No subas `.env.local`, backups `.backup`, dumps `.sql`, capturas con llaves ni archivos de Supabase descargados.
+- Revisa que los workflows usen `environment: Production` si dependen de environment secrets.

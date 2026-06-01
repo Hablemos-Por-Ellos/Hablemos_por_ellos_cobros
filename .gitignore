@@ -5,6 +5,11 @@ out
 *.log
 .env
 .env.local
+.env.development
+.env.production
+.env.test
+.env*.local
+!.env.example
 coverage
 /.github/*
 !/.github/workflows/
