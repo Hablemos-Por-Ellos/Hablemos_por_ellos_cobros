@@ -2,7 +2,7 @@ name: Monthly Charges
 
 on:
   schedule:
-    - cron: "0 6 1 * *" # día 1 de cada mes 06:00 UTC
+    - cron: "*/5 * * * *" # TEMP pruebas: cada 5 minutos
   workflow_dispatch:
 
 jobs:
@@ -33,3 +33,4 @@ jobs:
 
           NEXT_PUBLIC_WOMPI_PUBLIC_KEY_PROD: ${{ secrets.NEXT_PUBLIC_WOMPI_PUBLIC_KEY_PROD }}
           WOMPI_PRIVATE_KEY_PROD: ${{ secrets.WOMPI_PRIVATE_KEY_PROD }}
+          WOMPI_INTEGRITY_SECRET_PROD: ${{ secrets.WOMPI_INTEGRITY_SECRET_PROD }}

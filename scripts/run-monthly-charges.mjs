@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import crypto from "node:crypto";
 
 function required(name) {
   const value = process.env[name];
@@ -52,18 +53,31 @@ async function getAcceptanceToken({ baseUrl, publicKey }) {
   const json = await res.json().catch(() => ({}));
 
   const token = json?.data?.presigned_acceptance?.acceptance_token ?? null;
+  const personalDataToken = json?.data?.presigned_personal_data_auth?.acceptance_token ?? null;
 
-  if (!res.ok || !token) {
-    throw new Error(`Could not get acceptance_token from Wompi. status=${res.status}${wompiErrorHint(json)}`);
+  if (!res.ok || !token || !personalDataToken) {
+    throw new Error(`Could not get acceptance tokens from Wompi. status=${res.status}${wompiErrorHint(json)}`);
   }
 
-  return token;
+  return {
+    acceptanceToken: token,
+    acceptPersonalAuth: personalDataToken,
+  };
+}
+
+function createIntegritySignature({ reference, amountInCents, currency, integritySecret }) {
+  return crypto
+    .createHash("sha256")
+    .update(`${reference}${amountInCents}${currency}${integritySecret}`)
+    .digest("hex");
 }
 
 async function createTransaction({
   baseUrl,
   privateKey,
   acceptanceToken,
+  acceptPersonalAuth,
+  integritySecret,
   reference,
   amountInCents,
   currency,
@@ -80,11 +94,17 @@ async function createTransaction({
     },
     body: JSON.stringify({
       acceptance_token: acceptanceToken,
+      accept_personal_auth: acceptPersonalAuth,
       amount_in_cents: amountInCents,
       currency,
+      signature: createIntegritySignature({ reference, amountInCents, currency, integritySecret }),
       customer_email: customerEmail,
       payment_source_id: paymentSourceId,
       reference,
+      recurrent: true,
+      payment_method: {
+        installments: 1,
+      },
     }),
   });
 
@@ -127,8 +147,14 @@ async function main() {
       ? pickEnv("NEXT_PUBLIC_WOMPI_PUBLIC_KEY_PROD", "NEXT_PUBLIC_WOMPI_PUBLIC_KEY")
       : pickEnv("NEXT_PUBLIC_WOMPI_PUBLIC_KEY_SANDBOX", "NEXT_PUBLIC_WOMPI_PUBLIC_KEY");
 
+  const wompiIntegritySecret =
+    env === "prod"
+      ? pickEnv("WOMPI_INTEGRITY_SECRET_PROD", "WOMPI_INTEGRITY_SECRET")
+      : pickEnv("WOMPI_INTEGRITY_SECRET_SANDBOX", "WOMPI_INTEGRITY_SECRET");
+
   if (!wompiPrivateKey) throw new Error("Missing Wompi private key env (WOMPI_PRIVATE_KEY_* or WOMPI_PRIVATE_KEY).");
   if (!wompiPublicKey) throw new Error("Missing Wompi public key env (NEXT_PUBLIC_WOMPI_PUBLIC_KEY_* or NEXT_PUBLIC_WOMPI_PUBLIC_KEY).");
+  if (!wompiIntegritySecret) throw new Error("Missing Wompi integrity secret env (WOMPI_INTEGRITY_SECRET_* or WOMPI_INTEGRITY_SECRET).");
 
   const baseUrl = wompiBaseUrl(env);
 
@@ -154,7 +180,7 @@ async function main() {
     return;
   }
 
-  const acceptanceToken = await getAcceptanceToken({ baseUrl, publicKey: wompiPublicKey });
+  const { acceptanceToken, acceptPersonalAuth } = await getAcceptanceToken({ baseUrl, publicKey: wompiPublicKey });
   const monthStartIso = monthStartUtcIso(now);
 
   console.log(`Found ${dueSubs.length} subscription(s) due. Processing...`);
@@ -194,6 +220,8 @@ async function main() {
         baseUrl,
         privateKey: wompiPrivateKey,
         acceptanceToken,
+        acceptPersonalAuth,
+        integritySecret: wompiIntegritySecret,
         reference,
         amountInCents: Math.round(amount * 100),
         currency,
