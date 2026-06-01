@@ -26,6 +26,56 @@ function statusFromWompi(status: string) {
   return "past_due";
 }
 
+function errorDetails(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return {
+    name: "UnknownError",
+    message: String(error),
+  };
+}
+
+function logDonationError(
+  phase: "donor_upsert" | "checkout" | "confirm",
+  context: {
+    amount: number;
+    isRecurring: boolean;
+    paymentMethod?: "card" | "nequi";
+    reference?: string;
+    wompi?: {
+      cardToken?: unknown;
+      paymentSourceId?: unknown;
+      transactionId?: unknown;
+      token?: unknown;
+      acceptanceToken?: unknown;
+      acceptPersonalAuth?: unknown;
+    };
+  },
+  error: unknown
+) {
+  console.error("donations_api_error", {
+    phase,
+    amount: context.amount,
+    isRecurring: context.isRecurring,
+    paymentMethod: context.paymentMethod,
+    reference: context.reference,
+    wompiEnv: process.env.NEXT_PUBLIC_WOMPI_ENV === "prod" ? "prod" : "sandbox",
+    hasCardToken: Boolean(context.wompi?.cardToken),
+    hasPaymentSourceId: Boolean(context.wompi?.paymentSourceId),
+    hasTransactionId: Boolean(context.wompi?.transactionId),
+    hasToken: Boolean(context.wompi?.token),
+    hasAcceptanceToken: Boolean(context.wompi?.acceptanceToken),
+    hasAcceptPersonalAuth: Boolean(context.wompi?.acceptPersonalAuth),
+    error: errorDetails(error),
+  });
+}
+
 async function findSubscriptionByReference(supabase: SupabaseClient, reference: string) {
   const { data, error } = await supabase
     .from("subscriptions")
@@ -190,6 +240,7 @@ export async function POST(request: Request) {
     .single();
 
   if (donorError) {
+    logDonationError("donor_upsert", { amount, isRecurring, paymentMethod, wompi }, donorError);
     return NextResponse.json({ message: donorError.message }, { status: 500 });
   }
 
@@ -216,7 +267,11 @@ export async function POST(request: Request) {
 
       return NextResponse.json({ status: "checkout_started", subscriptionId: subscription.id, reference });
     } catch (error) {
-      return NextResponse.json({ message: error instanceof Error ? error.message : "No se pudo iniciar checkout." }, { status: 500 });
+      logDonationError("checkout", { amount, isRecurring, paymentMethod, reference, wompi }, error);
+      return NextResponse.json(
+        { message: error instanceof Error ? error.message : "No se pudo iniciar checkout." },
+        { status: 500 }
+      );
     }
   }
 
@@ -316,6 +371,7 @@ export async function POST(request: Request) {
       paymentSourceId,
     });
   } catch (error) {
+    logDonationError("confirm", { amount, isRecurring, paymentMethod, reference, wompi }, error);
     return NextResponse.json(
       { message: error instanceof Error ? error.message : "No se pudo guardar la suscripcion." },
       { status: 500 }
