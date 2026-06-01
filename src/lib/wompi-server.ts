@@ -8,6 +8,7 @@ import {
 } from "@/lib/wompi";
 
 type WompiJson = Record<string, any>;
+type SafeWompiValue = string | number | boolean | null | SafeWompiValue[] | { [key: string]: SafeWompiValue };
 
 export type WompiAcceptance = {
   acceptanceToken: string;
@@ -28,13 +29,60 @@ export type WompiTransactionResult = {
   status: string;
 };
 
-function wompiErrorHint(json: WompiJson) {
+function redactWompiText(value: string) {
+  return value
+    .replace(/\b[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,}\b/g, "[email_redacted]")
+    .replace(/\b(?:pub|prv)_(?:prod|test)_[A-Za-z0-9_-]+\b/g, "[wompi_key_redacted]")
+    .replace(/\b(?:prod|test)_integrity_[A-Za-z0-9_-]+\b/g, "[integrity_secret_redacted]")
+    .replace(/\btok_(?:prod|test)_[A-Za-z0-9_-]+\b/g, "[card_token_redacted]")
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[jwt_redacted]")
+    .slice(0, 500);
+}
+
+function safeWompiValue(value: unknown, depth = 0): SafeWompiValue | undefined {
+  if (value == null) return null;
+  if (typeof value === "string") return redactWompiText(value);
+  if (typeof value === "number" || typeof value === "boolean") return value;
+  if (depth >= 4) return "[nested_redacted]";
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 10).map((item) => safeWompiValue(item, depth + 1) ?? null);
+  }
+
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).reduce<Record<string, SafeWompiValue>>((acc, [key, item]) => {
+      const safeValue = safeWompiValue(item, depth + 1);
+      if (safeValue !== undefined) acc[key] = safeValue;
+      return acc;
+    }, {});
+  }
+
+  return redactWompiText(String(value));
+}
+
+function safeWompiJson(value: unknown) {
+  const safeValue = safeWompiValue(value);
+  if (safeValue == null) return "";
+
+  try {
+    return JSON.stringify(safeValue).slice(0, 1200);
+  } catch {
+    return "";
+  }
+}
+
+function wompiErrorHint(json: WompiJson, status?: number) {
   const err = json?.error ?? json;
+  const detail = safeWompiJson(err?.messages ?? err?.errors ?? err?.details ?? err?.data);
+  const traceId = typeof json?.meta?.trace_id === "string" ? json.meta.trace_id : "";
   const parts = [
+    typeof status === "number" ? `HTTP_${status}` : "",
     typeof err?.type === "string" ? err.type : "",
     typeof err?.reason === "string" ? err.reason : "",
     typeof err?.message === "string" ? err.message : "",
     Array.isArray(err?.messages) ? err.messages.filter((m: unknown) => typeof m === "string").join("|") : "",
+    detail ? `details=${detail}` : "",
+    traceId ? `trace_id=${traceId}` : "",
   ].filter(Boolean);
 
   return parts.length ? ` ${parts.join(": ")}` : "";
@@ -83,7 +131,7 @@ export async function getWompiAcceptance(): Promise<WompiAcceptance> {
   const acceptPersonalAuth = personal?.acceptance_token;
 
   if (!response.ok || !acceptanceToken || !acceptPersonalAuth) {
-    throw new Error(`No se pudieron obtener los tokens de aceptacion de Wompi.${wompiErrorHint(json)}`);
+    throw new Error(`No se pudieron obtener los tokens de aceptacion de Wompi.${wompiErrorHint(json, response.status)}`);
   }
 
   return {
@@ -121,7 +169,7 @@ export async function createWompiPaymentSource(params: {
   const id = data?.id;
 
   if (!response.ok || id == null) {
-    throw new Error(`No se pudo crear la fuente de pago en Wompi.${wompiErrorHint(json)}`);
+    throw new Error(`No se pudo crear la fuente de pago en Wompi.${wompiErrorHint(json, response.status)}`);
   }
 
   const type = String(data?.type ?? params.type);
@@ -174,7 +222,7 @@ export async function createWompiTransaction(params: {
   const id = data?.id;
 
   if (!response.ok || !id) {
-    throw new Error(`No se pudo crear la transaccion en Wompi.${wompiErrorHint(json)}`);
+    throw new Error(`No se pudo crear la transaccion en Wompi.${wompiErrorHint(json, response.status)}`);
   }
 
   return {

@@ -51,6 +51,7 @@ function logDonationError(
     wompi?: {
       cardToken?: unknown;
       paymentSourceId?: unknown;
+      paymentSourceType?: unknown;
       transactionId?: unknown;
       token?: unknown;
       acceptanceToken?: unknown;
@@ -66,6 +67,14 @@ function logDonationError(
     paymentMethod: context.paymentMethod,
     reference: context.reference,
     wompiEnv: process.env.NEXT_PUBLIC_WOMPI_ENV === "prod" ? "prod" : "sandbox",
+    cardTokenEnv:
+      typeof context.wompi?.cardToken === "string" && context.wompi.cardToken.startsWith("tok_prod_")
+        ? "prod"
+        : typeof context.wompi?.cardToken === "string" && context.wompi.cardToken.startsWith("tok_test_")
+          ? "sandbox"
+          : "unknown",
+    paymentSourceType:
+      typeof context.wompi?.paymentSourceType === "string" ? context.wompi.paymentSourceType : "unknown",
     hasCardToken: Boolean(context.wompi?.cardToken),
     hasPaymentSourceId: Boolean(context.wompi?.paymentSourceId),
     hasTransactionId: Boolean(context.wompi?.transactionId),
