@@ -9,11 +9,11 @@ import { AmountChip } from "@/components/ui/amount-chip";
 import { formatCurrencyCOP } from "@/lib/utils";
 
 const amountOptions = [
-  { value: 2500, description: "" },
-  { value: 5000, description: "" },
   { value: 10000, description: "" },
   { value: 20000, description: "" },
+  { value: 30000, description: "" },
   { value: 50000, description: "" },
+  { value: 75000, description: "" },
   { value: 100000, description: "" },
 ];
 

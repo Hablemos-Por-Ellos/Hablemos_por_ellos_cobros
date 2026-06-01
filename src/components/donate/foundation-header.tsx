@@ -3,11 +3,14 @@ import Image from "next/image";
 export function FoundationHeader() {
   return (
     <header className="flex flex-col items-center gap-3 text-center sm:gap-4">
-      <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-4 py-2 text-sm font-medium text-foundation-blue shadow-sm">
+      <a
+        href="/donar"
+        className="inline-flex items-center gap-2 rounded-full bg-white/70 px-4 py-2 text-sm font-medium text-foundation-blue shadow-sm"
+      >
         <LogoMark />
         <span>Fundación Hablemos por Ellos</span>
         <span className="text-base" aria-hidden="true">🐾</span>
-      </div>
+      </a>
       <div>
         <p className="text-sm uppercase tracking-[0.3em] text-foundation-green sm:text-base">Programa de donación</p>
         <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl lg:text-5xl">Salva vidas con una donación</h1>
