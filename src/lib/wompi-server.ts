@@ -122,7 +122,9 @@ export function createWompiIntegritySignature(reference: string, amountInCents: 
 
 export async function getWompiAcceptance(): Promise<WompiAcceptance> {
   const publicKey = requireWompiPublicKey();
-  const response = await fetch(`${getWompiApiBaseUrl()}/merchants/${encodeURIComponent(publicKey)}`);
+  const response = await fetch(`${getWompiApiBaseUrl()}/merchants/${encodeURIComponent(publicKey)}`, {
+    cache: "no-store",
+  });
   const json = (await response.json().catch(() => ({}))) as WompiJson;
 
   const acceptance = json?.data?.presigned_acceptance;

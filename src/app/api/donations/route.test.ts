@@ -73,6 +73,7 @@ vi.mock("@/lib/wompi-server", () => ({
 }));
 
 import { POST } from "./route";
+import { createWompiPaymentSource, createWompiTransaction, getWompiAcceptance } from "@/lib/wompi-server";
 
 const donor = {
   firstName: "Ana",
@@ -90,6 +91,9 @@ describe("POST /api/donations", () => {
   beforeEach(() => {
     mutations.length = 0;
     subscriptionRecord = { id: "sub-1", reference: "HPE-TEST", processed_transaction_ids: [] };
+    vi.mocked(createWompiPaymentSource).mockReset();
+    vi.mocked(createWompiTransaction).mockReset();
+    vi.mocked(getWompiAcceptance).mockReset();
   });
 
   it("updates a pending subscription by reference on confirm instead of inserting a duplicate", async () => {
@@ -117,5 +121,71 @@ describe("POST /api/donations", () => {
     expect(mutations.some((m) => m.table === "subscriptions" && m.op === "update")).toBe(true);
     expect(mutations.some((m) => m.table === "subscriptions" && m.op === "insert")).toBe(false);
     expect(mutations.some((m) => m.table === "payments" && m.op === "insert")).toBe(true);
+  });
+
+  it("uses fresh Wompi acceptance tokens for source and transaction on tokenized card confirm", async () => {
+    vi.mocked(getWompiAcceptance)
+      .mockResolvedValueOnce({
+        acceptanceToken: "source-acceptance",
+        acceptPersonalAuth: "source-personal-auth",
+        acceptancePermalink: null,
+        personalDataAuthPermalink: null,
+      })
+      .mockResolvedValueOnce({
+        acceptanceToken: "transaction-acceptance",
+        acceptPersonalAuth: "transaction-personal-auth",
+        acceptancePermalink: null,
+        personalDataAuthPermalink: null,
+      });
+    vi.mocked(createWompiPaymentSource).mockResolvedValue({
+      id: "src-1",
+      type: "CARD",
+      status: "AVAILABLE",
+      maskedDetails: "VISA **** 4242",
+    });
+    vi.mocked(createWompiTransaction).mockResolvedValue({
+      id: "tx-1",
+      status: "approved",
+    });
+
+    const response = await POST(
+      new Request("https://example.test/api/donations", {
+        method: "POST",
+        body: JSON.stringify({
+          stage: "confirm",
+          donor,
+          amount: 10000,
+          paymentMethod: "card",
+          wompi: {
+            reference: "HPE-TEST",
+            cardToken: "tok_prod_card",
+            paymentSourceType: "CARD",
+            acceptanceToken: "already-used-acceptance",
+            acceptPersonalAuth: "already-used-personal-auth",
+            maskedDetails: "Tarjeta tokenizada",
+          },
+        }),
+      })
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.status).toBe("subscription_created");
+    expect(getWompiAcceptance).toHaveBeenCalledTimes(2);
+    expect(createWompiPaymentSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        acceptanceToken: "source-acceptance",
+        acceptPersonalAuth: "source-personal-auth",
+      })
+    );
+    expect(createWompiTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        acceptanceToken: "transaction-acceptance",
+        acceptPersonalAuth: "transaction-personal-auth",
+      })
+    );
+    expect(createWompiPaymentSource).not.toHaveBeenCalledWith(
+      expect.objectContaining({ acceptanceToken: "already-used-acceptance" })
+    );
   });
 });

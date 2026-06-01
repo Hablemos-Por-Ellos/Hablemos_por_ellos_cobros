@@ -299,20 +299,14 @@ export async function POST(request: Request) {
           );
         }
 
-        const acceptance =
-          wompi.acceptanceToken && wompi.acceptPersonalAuth
-            ? {
-                acceptanceToken: wompi.acceptanceToken,
-                acceptPersonalAuth: wompi.acceptPersonalAuth,
-              }
-            : await getWompiAcceptance();
+        const paymentSourceAcceptance = await getWompiAcceptance();
 
         const paymentSource = await createWompiPaymentSource({
           token: wompi.cardToken,
           type: wompi.paymentSourceType ?? "CARD",
           customerEmail: donor.email,
-          acceptanceToken: acceptance.acceptanceToken,
-          acceptPersonalAuth: acceptance.acceptPersonalAuth,
+          acceptanceToken: paymentSourceAcceptance.acceptanceToken,
+          acceptPersonalAuth: paymentSourceAcceptance.acceptPersonalAuth,
         });
 
         if (paymentSource.status.toUpperCase() !== "AVAILABLE") {
@@ -325,14 +319,16 @@ export async function POST(request: Request) {
         paymentSourceId = paymentSource.id;
         maskedDetails = wompi.maskedDetails ?? paymentSource.maskedDetails;
 
+        const transactionAcceptance = await getWompiAcceptance();
+
         const transaction = await createWompiTransaction({
           reference,
           amountInCents: Math.max(150000, Math.round(amount * 100)),
           currency: "COP",
           customerEmail: donor.email,
           paymentSourceId,
-          acceptanceToken: acceptance.acceptanceToken,
-          acceptPersonalAuth: acceptance.acceptPersonalAuth,
+          acceptanceToken: transactionAcceptance.acceptanceToken,
+          acceptPersonalAuth: transactionAcceptance.acceptPersonalAuth,
           recurrent: true,
         });
 
