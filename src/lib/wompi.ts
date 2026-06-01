@@ -7,11 +7,11 @@ const WOMPI_API_BASE_URL_PROD = "https://production.wompi.co/v1";
 const WOMPI_API_BASE_URL_SANDBOX = "https://sandbox.wompi.co/v1";
 
 // ============================================================
-// 🔧 CAMBIAR AQUÍ EL ENTORNO: "sandbox" o "prod"
-// Ejemplo: export const WOMPI_ENV = "prod"  // -> usa llaves/urls de producción
-//           export const WOMPI_ENV = "sandbox" // -> usa llaves/urls de sandbox
+// 🔧 ENTORNO: usa prod si NEXT_PUBLIC_WOMPI_ENV === "prod"; de lo contrario sandbox
+// Si prefieres fijarlo manualmente, cambia el ternario a "prod" | "sandbox" directamente.
 // ============================================================
-export const WOMPI_ENV: "sandbox" | "prod" = "sandbox";
+export const WOMPI_ENV: "sandbox" | "prod" =
+  process.env.NEXT_PUBLIC_WOMPI_ENV === "prod" ? "prod" : "sandbox";
 // ============================================================
 
 // Usa prod si WOMPI_ENV === "prod"; sandbox en cualquier otro caso
@@ -123,4 +123,10 @@ export function simulateWompiAuthorization(method: "card" | "nequi"): WompiSimul
     token,
     maskedDetails,
   };
+}
+
+// Limpia cualquier overlay del widget de Wompi que quede pegado en el DOM
+export function cleanupWompiOverlayDom(): void {
+  if (typeof document === "undefined") return;
+  document.querySelectorAll(".waybox-backdrop, .waybox-preload-wrapper").forEach((el) => el.remove());
 }

@@ -9,4 +9,6 @@
 body {
   @apply bg-foundation-cream text-slate-900;
   font-family: var(--font-poppins), "Nunito", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overflow-x: hidden;
 }
+
