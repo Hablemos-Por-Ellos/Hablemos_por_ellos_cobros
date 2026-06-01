@@ -180,12 +180,18 @@ export async function POST(request: Request) {
           ? subscription.processed_transaction_ids
           : [];
 
-        if (!processedIds.includes(wompiTransactionId)) {
-          const baseDate = subscription?.next_payment_date
-            ? new Date(subscription.next_payment_date as unknown as string)
-            : new Date();
+        const shouldScheduleNextPayment =
+          !subscription?.next_payment_date || !processedIds.includes(wompiTransactionId);
+
+        if (shouldScheduleNextPayment) {
+          const baseDate =
+            subscription?.next_payment_date && !processedIds.includes(wompiTransactionId)
+              ? new Date(subscription.next_payment_date as unknown as string)
+              : new Date();
           updates.next_payment_date = addOneMonthKeepingDay(baseDate).toISOString();
-          updates.processed_transaction_ids = [...processedIds, wompiTransactionId];
+          updates.processed_transaction_ids = processedIds.includes(wompiTransactionId)
+            ? processedIds
+            : [...processedIds, wompiTransactionId];
         }
       }
     }

@@ -180,7 +180,6 @@ async function main() {
     return;
   }
 
-  const { acceptanceToken, acceptPersonalAuth } = await getAcceptanceToken({ baseUrl, publicKey: wompiPublicKey });
   const monthStartIso = monthStartUtcIso(now);
 
   console.log(`Found ${dueSubs.length} subscription(s) due. Processing...`);
@@ -216,6 +215,7 @@ async function main() {
     }
 
     try {
+      const { acceptanceToken, acceptPersonalAuth } = await getAcceptanceToken({ baseUrl, publicKey: wompiPublicKey });
       const { id: txId, status } = await createTransaction({
         baseUrl,
         privateKey: wompiPrivateKey,
