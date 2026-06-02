@@ -15,12 +15,12 @@ export default function HomePage() {
             priority
           />
         </div>
-        <p className="text-sm uppercase tracking-[0.3em] text-foundation-green">Hablemos por Ellos</p>
+        <p className="text-sm uppercase tracking-[0.3em] text-foundation-blue">Hablemos por Ellos</p>
         <h1 className="mt-4 text-3xl font-semibold text-slate-900">
           Donaciones
         </h1>
         <p className="mt-3 text-lg text-slate-600">
-          Bienvenido al portal de Donaciones de la fundación Hablemos por Ellos. Haz clic en el botón para comenzar tu donación.
+          Hola Humano, bienvenido al portal de ayuda de la sucursal del cielo, FUNDACIÓN HABLEMOS POR ELLOS. Tu apoyo está a un CLICK
         </p>
         <Link
           href="/donar"

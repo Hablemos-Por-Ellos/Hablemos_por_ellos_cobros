@@ -64,15 +64,17 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
   return (
     <form onSubmit={handleSubmit} className="grid gap-6">
       <div className="grid gap-4 rounded-4xl bg-white/90 p-6 shadow-card">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="inline-flex items-center gap-3 rounded-full bg-foundation-blue/10 px-4 py-2 text-sm text-foundation-blue">
-            <span>💙</span>
-            <span>Tu apoyo mensual cambia vidas</span>
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+          <div className="inline-flex w-full items-start gap-3 rounded-3xl bg-foundation-blue/10 px-4 py-3 text-sm text-foundation-blue xl:w-auto xl:max-w-md">
+            <span aria-hidden="true">🩵</span>
+            <span className="leading-snug">
+              Tu contribución mensual Restaura esculturas con vida que tras haber sido rotas, parecían estar perdidas 🐾
+            </span>
           </div>
-          <div className="flex items-center gap-2 text-sm text-slate-500">
-            <span>🐶</span>
-            <span>🐱</span>
-            <span>Peludos atendidos cada mes</span>
+          <div className="flex items-start gap-2 text-sm text-slate-500 xl:max-w-xs xl:justify-end xl:text-right">
+            <span aria-hidden="true">🐶</span>
+            <span aria-hidden="true">🐱</span>
+            <span className="leading-snug">Actualmente tu amor ayudará a más de 200 vidas de diferentes especies</span>
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -150,9 +152,12 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
             <p className="text-sm font-semibold text-foundation-green">Tu donación</p>
             <h2 className="text-2xl font-semibold text-slate-900">{formatCurrencyCOP(values.amount)} COP</h2>
           </div>
-          <div className="flex items-center gap-3 text-sm text-slate-500">
-            <span className="text-base">🩺</span>
-            <span className="leading-snug">Tu aporte se transforma en alimento, rescates y atención veterinaria.</span>
+          <div className="flex items-start gap-3 text-sm text-slate-500">
+            <span className="text-base" aria-hidden="true">🩺</span>
+            <span className="leading-snug">
+              Tu donación, no solo cubre necesidad, si no que llena de esperanza a muchos 4 patas
+              <span className="mt-1 block font-semibold text-slate-700">GRACIAS POR TU GENEROSIDAD</span>
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-3 rounded-2xl border border-foundation-warm/45 bg-foundation-warm/10 px-4 py-3 ring-1 ring-foundation-warm/25">
