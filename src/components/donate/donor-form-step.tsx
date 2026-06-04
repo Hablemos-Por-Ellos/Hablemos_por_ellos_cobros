@@ -74,7 +74,7 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
           <div className="flex items-start gap-2 text-sm text-slate-500 xl:max-w-xs xl:justify-end xl:text-right">
             <span aria-hidden="true">🐶</span>
             <span aria-hidden="true">🐱</span>
-            <span className="leading-snug">Actualmente tu amor ayudará a más de 200 vidas de diferentes especies</span>
+            <span className="leading-snug">Actualmente tu amor ayudará a más de 220 vidas de diferentes especies</span>
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
