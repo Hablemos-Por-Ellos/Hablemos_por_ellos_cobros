@@ -20,7 +20,7 @@ export default function DonarPage() {
 
       <footer className="mt-10 flex flex-col items-center gap-2 rounded-4xl bg-white/80 p-6 text-center text-sm text-slate-500 sm:mt-12">
         <p>Pasarela de pagos directa con la fundación.</p>
-        <p>¿Preguntas? Escríbenos a contacto@hablemosporellos.org</p>
+        <p>¿Preguntas? Escríbenos a hablemosporellosgrupoderescate@gmail.com</p>
         <p className="text-xs text-slate-400">Versión {packageJson.version}</p>
       </footer>
     </main>
