@@ -2,17 +2,9 @@ import { NextResponse } from "next/server";
 import { subscriptionPayloadSchema } from "@/lib/schemas";
 import { getServiceSupabaseClient } from "@/lib/supabase-server";
 import { createWompiPaymentSource, createWompiTransaction, getWompiAcceptance } from "@/lib/wompi-server";
+import { getNextMonthlyPaymentDate, isPreferredPaymentDay } from "@/lib/payment-dates";
 
 type SupabaseClient = NonNullable<ReturnType<typeof getServiceSupabaseClient>>;
-
-function addOneMonthKeepingDay(base: Date) {
-  const targetDay = base.getDate();
-  const candidate = new Date(base);
-  candidate.setMonth(candidate.getMonth() + 1, 1);
-  const daysInTargetMonth = new Date(candidate.getFullYear(), candidate.getMonth() + 1, 0).getDate();
-  candidate.setDate(Math.min(targetDay, daysInTargetMonth));
-  return candidate;
-}
 
 function fallbackReference() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -107,11 +99,14 @@ async function saveSubscription(params: {
   paymentMethod?: "card" | "nequi";
   reference: string;
   status: string;
+  preferredPaymentDay?: number | null;
   paymentSourceId?: string | null;
   maskedDetails?: string | null;
   transactionId?: string | null;
 }) {
   const existing = await findSubscriptionByReference(params.supabase, params.reference);
+  const preferredPaymentDay =
+    params.isRecurring && isPreferredPaymentDay(params.preferredPaymentDay) ? params.preferredPaymentDay : null;
   const processedIds = Array.isArray(existing?.processed_transaction_ids) ? existing.processed_transaction_ids : [];
   const nextProcessedIds =
     params.transactionId && !processedIds.includes(params.transactionId)
@@ -127,9 +122,12 @@ async function saveSubscription(params: {
     payment_method_type: params.paymentMethod,
     wompi_payment_source_id: params.paymentSourceId ?? null,
     wompi_masked_details: params.maskedDetails ?? null,
+    preferred_payment_day: preferredPaymentDay,
     reference: params.reference,
     next_payment_date:
-      params.isRecurring && params.status === "active" ? addOneMonthKeepingDay(new Date()).toISOString() : null,
+      params.isRecurring && params.status === "active"
+        ? getNextMonthlyPaymentDate(new Date(), preferredPaymentDay).toISOString()
+        : null,
     processed_transaction_ids: nextProcessedIds,
   };
 
@@ -156,11 +154,13 @@ async function savePendingCheckout(params: {
   amount: number;
   isRecurring: boolean;
   paymentMethod?: "card" | "nequi";
+  preferredPaymentDay?: number | null;
   reference: string;
 }) {
   return saveSubscription({
     ...params,
     status: "pending",
+    preferredPaymentDay: params.preferredPaymentDay,
     paymentSourceId: null,
     maskedDetails: null,
     transactionId: null,
@@ -211,6 +211,7 @@ export async function POST(request: Request) {
 
   const { stage, donor, amount, paymentMethod, wompi } = parsed.data;
   const isRecurring = donor.isRecurring ?? true;
+  const preferredPaymentDay = isRecurring ? donor.preferredPaymentDay : null;
   const supabase = getServiceSupabaseClient();
   const allowDemo = process.env.ALLOW_DEMO_MODE === "true" || process.env.NODE_ENV !== "production";
 
@@ -271,6 +272,7 @@ export async function POST(request: Request) {
         amount,
         isRecurring,
         paymentMethod,
+        preferredPaymentDay,
         reference,
       });
 
@@ -353,6 +355,7 @@ export async function POST(request: Request) {
       paymentMethod,
       reference,
       status: subscriptionStatus,
+      preferredPaymentDay,
       paymentSourceId,
       maskedDetails,
       transactionId,

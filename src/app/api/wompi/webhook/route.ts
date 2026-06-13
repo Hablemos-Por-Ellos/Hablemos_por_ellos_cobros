@@ -1,21 +1,13 @@
 import { NextResponse } from "next/server";
 import { getServiceSupabaseClient } from "@/lib/supabase-server";
 import { getWompiEventsSecret } from "@/lib/wompi";
+import { getNextMonthlyPaymentDate, isPreferredPaymentDay } from "@/lib/payment-dates";
 import {
   extractPaymentSourceId,
   isValidWompiEventChecksum,
   type WompiEventPayload,
   type WompiTransaction,
 } from "@/lib/wompi-webhook";
-
-function addOneMonthKeepingDay(base: Date) {
-  const targetDay = base.getDate();
-  const candidate = new Date(base);
-  candidate.setMonth(candidate.getMonth() + 1, 1);
-  const daysInTargetMonth = new Date(candidate.getFullYear(), candidate.getMonth() + 1, 0).getDate();
-  candidate.setDate(Math.min(targetDay, daysInTargetMonth));
-  return candidate;
-}
 
 function subscriptionStatusFromTransaction(status: string) {
   if (status === "approved") return "active";
@@ -171,7 +163,7 @@ export async function POST(request: Request) {
     if (subscriptionStatus === "active") {
       const { data: subscription, error: fetchSubError } = await supabase
         .from("subscriptions")
-        .select("next_payment_date, processed_transaction_ids")
+        .select("next_payment_date, preferred_payment_day, processed_transaction_ids")
         .eq("id", subscriptionId)
         .maybeSingle();
 
@@ -188,7 +180,10 @@ export async function POST(request: Request) {
             subscription?.next_payment_date && !processedIds.includes(wompiTransactionId)
               ? new Date(subscription.next_payment_date as unknown as string)
               : new Date();
-          updates.next_payment_date = addOneMonthKeepingDay(baseDate).toISOString();
+          const preferredPaymentDay = isPreferredPaymentDay(subscription?.preferred_payment_day)
+            ? subscription.preferred_payment_day
+            : null;
+          updates.next_payment_date = getNextMonthlyPaymentDate(baseDate, preferredPaymentDay).toISOString();
           updates.processed_transaction_ids = processedIds.includes(wompiTransactionId)
             ? processedIds
             : [...processedIds, wompiTransactionId];

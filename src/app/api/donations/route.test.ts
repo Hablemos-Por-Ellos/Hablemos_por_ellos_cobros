@@ -85,6 +85,7 @@ const donor = {
   city: "Bogota",
   wantsUpdates: true,
   isRecurring: true,
+  preferredPaymentDay: 16,
 };
 
 describe("POST /api/donations", () => {
@@ -121,6 +122,9 @@ describe("POST /api/donations", () => {
     expect(mutations.some((m) => m.table === "subscriptions" && m.op === "update")).toBe(true);
     expect(mutations.some((m) => m.table === "subscriptions" && m.op === "insert")).toBe(false);
     expect(mutations.some((m) => m.table === "payments" && m.op === "insert")).toBe(true);
+    expect(mutations.find((m) => m.table === "subscriptions" && m.op === "update")?.payload).toMatchObject({
+      preferred_payment_day: 16,
+    });
   });
 
   it("uses fresh Wompi acceptance tokens for source and transaction on tokenized card confirm", async () => {

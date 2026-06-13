@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { TextInput } from "@/components/ui/input";
 import { SelectField } from "@/components/ui/select";
 import { AmountChip } from "@/components/ui/amount-chip";
-import { formatCurrencyCOP } from "@/lib/utils";
+import { cn, formatCurrencyCOP } from "@/lib/utils";
 
 const amountOptions = [
   { value: 10000, description: "" },
@@ -16,6 +16,13 @@ const amountOptions = [
   { value: 75000, description: "" },
   { value: 100000, description: "" },
 ];
+
+const paymentDayOptions = [
+  { value: 1, label: "Día 1" },
+  { value: 6, label: "Día 6" },
+  { value: 16, label: "Día 16" },
+  { value: 28, label: "Día 28" },
+] as const;
 
 interface DonorFormStepProps {
   values: DonorFormValues;
@@ -184,6 +191,44 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
             </div>
           </div>
         </div>
+        {values.isRecurring && (
+          <fieldset className="grid gap-3 rounded-3xl border border-foundation-blue/20 bg-foundation-blue/[0.04] p-4">
+            <legend className="text-base font-semibold text-slate-900">Fecha de cobro mensual</legend>
+            <p className="-mt-2 text-sm leading-relaxed text-slate-600">
+              Tu primer aporte se realiza hoy. Los próximos cobros se harán en el día que elijas.
+            </p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {paymentDayOptions.map((option) => {
+                const selected = values.preferredPaymentDay === option.value;
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => handleFieldChange("preferredPaymentDay", option.value)}
+                    className={cn(
+                      "min-h-24 rounded-2xl border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foundation-blue focus-visible:ring-offset-2",
+                      selected
+                        ? "border-foundation-blue bg-white text-foundation-blue shadow-sm"
+                        : "border-white bg-white/75 text-slate-700 hover:border-foundation-blue/35 hover:bg-white"
+                    )}
+                  >
+                    <span className="block text-lg font-semibold">{option.label}</span>
+                    {selected ? (
+                      <span className="mt-2 inline-flex rounded-full bg-foundation-blue/10 px-2 py-1 text-xs font-semibold text-foundation-blue">
+                        Elegido
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="rounded-2xl bg-white/80 px-3 py-2 text-xs leading-relaxed text-slate-600">
+              No habrá doble cobro este mes: la fecha que elijas aplicará desde el próximo mes.
+            </p>
+          </fieldset>
+        )}
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
           {amountOptions.map((option) => (
             <AmountChip

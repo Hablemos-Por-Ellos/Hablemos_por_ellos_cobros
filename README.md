@@ -124,6 +124,8 @@ El script `scripts/run-monthly-charges.mjs` busca suscripciones:
 
 Si encuentra una suscripcion vencida, crea una transaccion en Wompi con la fuente de pago guardada. El script evita duplicar cobros si ya existe un pago `approved` o `pending` en el mes actual.
 
+Las suscripciones mensuales pueden guardar `preferred_payment_day` con uno de estos valores: `1`, `6`, `16` o `28`. El primer cobro se realiza al crear la suscripcion; los siguientes cobros se programan desde el mes siguiente en el dia elegido, a las 7:00 a.m. Colombia.
+
 Para ejecutar manualmente desde GitHub:
 
 1. Actions

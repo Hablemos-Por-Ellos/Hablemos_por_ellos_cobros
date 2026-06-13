@@ -13,6 +13,7 @@ export const donorFormSchema = z.object({
   city: z.string().min(2, "Ciudad inválida"),
   wantsUpdates: z.boolean().default(false),
   isRecurring: z.boolean().default(true),
+  preferredPaymentDay: z.union([z.literal(1), z.literal(6), z.literal(16), z.literal(28)]).default(16),
   amount: z
     .number({ invalid_type_error: "Selecciona un monto" })
     .min(1500, "El monto mínimo es 1.500 COP"),
