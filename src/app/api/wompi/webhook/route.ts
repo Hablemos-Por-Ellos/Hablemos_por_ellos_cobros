@@ -4,6 +4,7 @@ import { getWompiEventsSecret } from "@/lib/wompi";
 import { getNextMonthlyPaymentDate, isPreferredPaymentDay } from "@/lib/payment-dates";
 import {
   extractPaymentSourceId,
+  getWompiEffectiveTransactionDate,
   isValidWompiEventChecksum,
   type WompiEventPayload,
   type WompiTransaction,
@@ -53,6 +54,8 @@ export async function POST(request: Request) {
   }
 
   const tx = transaction;
+  const receivedAt = new Date();
+  const effectiveTransactionDate = getWompiEffectiveTransactionDate(tx, payload.timestamp, receivedAt);
   const paymentSourceId = tx ? extractPaymentSourceId(tx) : null;
   const wompiTransactionId = tx?.id ?? null;
   const amountInCents = tx?.amount_in_cents ?? tx?.amountInCents ?? null;
@@ -73,12 +76,14 @@ export async function POST(request: Request) {
           reference: tx.reference,
           amount_in_cents: amountInCents,
           currency: tx.currency,
+          finalized_at: tx.finalized_at ?? tx.finalizedAt ?? null,
           payment_source_id: paymentSourceId,
           payment_method_type: tx.payment_method_type ?? tx.paymentMethodType ?? tx.payment_method?.type ?? tx.paymentMethod?.type,
         }
       : null,
     timestamp: payload.timestamp ?? null,
-    received_at: new Date().toISOString(),
+    effective_transaction_at: effectiveTransactionDate.toISOString(),
+    received_at: receivedAt.toISOString(),
   };
 
   const { error: logError } = await supabase.from("webhook_events").insert({
@@ -176,14 +181,23 @@ export async function POST(request: Request) {
           !subscription?.next_payment_date || !processedIds.includes(wompiTransactionId);
 
         if (shouldScheduleNextPayment) {
-          const baseDate =
-            subscription?.next_payment_date && !processedIds.includes(wompiTransactionId)
-              ? new Date(subscription.next_payment_date as unknown as string)
-              : new Date();
           const preferredPaymentDay = isPreferredPaymentDay(subscription?.preferred_payment_day)
             ? subscription.preferred_payment_day
             : null;
-          updates.next_payment_date = getNextMonthlyPaymentDate(baseDate, preferredPaymentDay).toISOString();
+          const candidateNextPaymentDate = getNextMonthlyPaymentDate(
+            effectiveTransactionDate,
+            preferredPaymentDay
+          );
+          const existingNextPaymentDate = subscription?.next_payment_date
+            ? new Date(subscription.next_payment_date as unknown as string)
+            : null;
+
+          updates.next_payment_date =
+            existingNextPaymentDate &&
+            !Number.isNaN(existingNextPaymentDate.getTime()) &&
+            existingNextPaymentDate > candidateNextPaymentDate
+              ? existingNextPaymentDate.toISOString()
+              : candidateNextPaymentDate.toISOString();
           updates.processed_transaction_ids = processedIds.includes(wompiTransactionId)
             ? processedIds
             : [...processedIds, wompiTransactionId];

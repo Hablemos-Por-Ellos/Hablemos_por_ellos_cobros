@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
+import { pathToFileURL } from "node:url";
+import { runMonthlyCharges } from "./monthly-charge-runner.mjs";
 
 function required(name) {
   const value = process.env[name];
@@ -8,9 +10,9 @@ function required(name) {
 }
 
 function pickEnv(...names) {
-  for (const n of names) {
-    const v = process.env[n];
-    if (v) return v;
+  for (const name of names) {
+    const value = process.env[name];
+    if (value) return value;
   }
   return "";
 }
@@ -30,39 +32,30 @@ function wompiBaseUrl(env) {
   return env === "prod" ? "https://production.wompi.co/v1" : "https://sandbox.wompi.co/v1";
 }
 
-function monthStartUtcIso(date) {
-  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1, 0, 0, 0, 0));
-  return start.toISOString();
-}
-
 function wompiErrorHint(json) {
-  const err = json?.error ?? null;
-  if (!err || typeof err !== "object") return "";
+  const error = json?.error ?? null;
+  if (!error || typeof error !== "object") return "";
 
-  const type = typeof err.type === "string" ? err.type : "";
-  const reason = typeof err.reason === "string" ? err.reason : "";
-  const messages = Array.isArray(err.messages) ? err.messages.filter((m) => typeof m === "string") : [];
+  const type = typeof error.type === "string" ? error.type : "";
+  const reason = typeof error.reason === "string" ? error.reason : "";
+  const messages = Array.isArray(error.messages) ? error.messages.filter((message) => typeof message === "string") : [];
 
   const hintParts = [type, reason, messages.join("|")].filter(Boolean);
   return hintParts.length ? ` hint=${hintParts.join(":")}` : "";
 }
 
 async function getAcceptanceToken({ baseUrl, publicKey }) {
-  const url = `${baseUrl}/merchants/${encodeURIComponent(publicKey)}`;
-  const res = await fetch(url);
-  const json = await res.json().catch(() => ({}));
+  const response = await fetch(`${baseUrl}/merchants/${encodeURIComponent(publicKey)}`);
+  const json = await response.json().catch(() => ({}));
 
-  const token = json?.data?.presigned_acceptance?.acceptance_token ?? null;
-  const personalDataToken = json?.data?.presigned_personal_data_auth?.acceptance_token ?? null;
+  const acceptanceToken = json?.data?.presigned_acceptance?.acceptance_token ?? null;
+  const acceptPersonalAuth = json?.data?.presigned_personal_data_auth?.acceptance_token ?? null;
 
-  if (!res.ok || !token || !personalDataToken) {
-    throw new Error(`Could not get acceptance tokens from Wompi. status=${res.status}${wompiErrorHint(json)}`);
+  if (!response.ok || !acceptanceToken || !acceptPersonalAuth) {
+    throw new Error(`Could not get acceptance tokens from Wompi. status=${response.status}${wompiErrorHint(json)}`);
   }
 
-  return {
-    acceptanceToken: token,
-    acceptPersonalAuth: personalDataToken,
-  };
+  return { acceptanceToken, acceptPersonalAuth };
 }
 
 function createIntegritySignature({ reference, amountInCents, currency, integritySecret }) {
@@ -72,7 +65,7 @@ function createIntegritySignature({ reference, amountInCents, currency, integrit
     .digest("hex");
 }
 
-async function createTransaction({
+async function createWompiTransaction({
   baseUrl,
   privateKey,
   acceptanceToken,
@@ -84,9 +77,7 @@ async function createTransaction({
   customerEmail,
   paymentSourceId,
 }) {
-  const url = `${baseUrl}/transactions`;
-
-  const res = await fetch(url, {
+  const response = await fetch(`${baseUrl}/transactions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${privateKey}`,
@@ -102,21 +93,17 @@ async function createTransaction({
       payment_source_id: paymentSourceId,
       reference,
       recurrent: true,
-      payment_method: {
-        installments: 1,
-      },
+      payment_method: { installments: 1 },
     }),
   });
 
-  const json = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    throw new Error(`Wompi transaction failed. status=${res.status}${wompiErrorHint(json)}`);
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(`Wompi transaction failed. status=${response.status}${wompiErrorHint(json)}`);
   }
 
   const id = json?.data?.id ?? null;
   const status = String(json?.data?.status ?? "pending").toLowerCase();
-
   if (!id) {
     throw new Error(`Wompi response missing data.id. status=${status}${wompiErrorHint(json)}`);
   }
@@ -124,16 +111,8 @@ async function createTransaction({
   return { id, status };
 }
 
-function yyyyMM(date) {
-  const y = date.getUTCFullYear();
-  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
-  return `${y}${m}`;
-}
-
 async function main() {
-  const now = new Date();
   const env = getWompiEnv();
-
   const SUPABASE_URL = required("SUPABASE_URL");
   const SUPABASE_SERVICE_ROLE_KEY = required("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -141,12 +120,10 @@ async function main() {
     env === "prod"
       ? pickEnv("WOMPI_PRIVATE_KEY_PROD", "WOMPI_PRIVATE_KEY")
       : pickEnv("WOMPI_PRIVATE_KEY_SANDBOX", "WOMPI_PRIVATE_KEY");
-
   const wompiPublicKey =
     env === "prod"
       ? pickEnv("NEXT_PUBLIC_WOMPI_PUBLIC_KEY_PROD", "NEXT_PUBLIC_WOMPI_PUBLIC_KEY")
       : pickEnv("NEXT_PUBLIC_WOMPI_PUBLIC_KEY_SANDBOX", "NEXT_PUBLIC_WOMPI_PUBLIC_KEY");
-
   const wompiIntegritySecret =
     env === "prod"
       ? pickEnv("WOMPI_INTEGRITY_SECRET_PROD", "WOMPI_INTEGRITY_SECRET")
@@ -157,114 +134,32 @@ async function main() {
   if (!wompiIntegritySecret) throw new Error("Missing Wompi integrity secret env (WOMPI_INTEGRITY_SECRET_* or WOMPI_INTEGRITY_SECRET).");
 
   const baseUrl = wompiBaseUrl(env);
-
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
 
-  const nowIso = now.toISOString();
-
-  const { data: dueSubs, error } = await supabase
-    .from("subscriptions")
-    .select("id, amount, currency, next_payment_date, wompi_payment_source_id, reference, donor:donor_id(email)")
-    .eq("status", "active")
-    .eq("frequency", "monthly")
-    .not("wompi_payment_source_id", "is", null)
-    .not("next_payment_date", "is", null)
-    .lte("next_payment_date", nowIso);
-
-  if (error) throw new Error(`Supabase query failed: ${error.message}`);
-
-  if (!dueSubs?.length) {
-    console.log("No subscriptions due for charge.");
-    return;
-  }
-
-  const monthStartIso = monthStartUtcIso(now);
-
-  console.log(`Found ${dueSubs.length} subscription(s) due. Processing...`);
-
-  for (const sub of dueSubs) {
-    const subscriptionId = sub.id;
-    const amount = Number(sub.amount);
-    const currency = sub.currency || "COP";
-    const paymentSourceId = sub.wompi_payment_source_id;
-    const customerEmail = sub?.donor?.email || "";
-
-    const reference = sub.reference ? `${sub.reference}-${yyyyMM(now)}` : `SUB-${subscriptionId}-${yyyyMM(now)}`;
-
-    if (!paymentSourceId) {
-      console.log(`Skip subscription=${subscriptionId} (missing wompi_payment_source_id)`);
-      continue;
-    }
-
-    // Avoid duplicate charges in same month if workflow is re-run
-    const { data: existingThisMonth, error: existingErr } = await supabase
-      .from("payments")
-      .select("id, status")
-      .eq("subscription_id", subscriptionId)
-      .gte("created_at", monthStartIso)
-      .in("status", ["approved", "pending"])
-      .limit(1);
-
-    if (existingErr) {
-      console.log(`WARN subscription=${subscriptionId} could not check existing payments: ${existingErr.message}`);
-    } else if (existingThisMonth?.length) {
-      console.log(`Skip subscription=${subscriptionId} (already has payment this month)`);
-      continue;
-    }
-
-    try {
+  const stats = await runMonthlyCharges({
+    supabase,
+    createTransaction: async (params) => {
       const { acceptanceToken, acceptPersonalAuth } = await getAcceptanceToken({ baseUrl, publicKey: wompiPublicKey });
-      const { id: txId, status } = await createTransaction({
+      return createWompiTransaction({
+        ...params,
         baseUrl,
         privateKey: wompiPrivateKey,
         acceptanceToken,
         acceptPersonalAuth,
         integritySecret: wompiIntegritySecret,
-        reference,
-        amountInCents: Math.round(amount * 100),
-        currency,
-        customerEmail,
-        paymentSourceId,
       });
+    },
+  });
 
-      const { error: payErr } = await supabase.from("payments").insert({
-        subscription_id: subscriptionId,
-        amount,
-        currency,
-        status,
-        wompi_transaction_id: txId,
-      });
-
-      if (payErr) {
-        console.log(`WARN subscription=${subscriptionId} tx=${txId} payment insert failed: ${payErr.message}`);
-      }
-
-      // Log to audit_logs
-      await supabase.from("audit_logs").insert({
-        action: "monthly_charge_created",
-        subscription_id: subscriptionId,
-        details: { reference, txId, status },
-      });
-
-      console.log(`OK subscription=${subscriptionId} tx=${txId} status=${status}`);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-
-      // Log failure to audit_logs
-      await supabase.from("audit_logs").insert({
-        action: "monthly_charge_failed",
-        subscription_id: subscriptionId,
-        details: { reference, error: msg },
-      });
-
-      console.log(`FAIL subscription=${subscriptionId} error=${msg}`);
-    }
-  }
+  console.log(`Monthly charges complete ${JSON.stringify(stats)}`);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+const isDirectExecution = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isDirectExecution) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
