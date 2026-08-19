@@ -54,6 +54,7 @@ vi.mock("@/lib/supabase-server", () => ({
 import {
   computeWompiEventChecksum,
   extractPaymentSourceId,
+  getWompiEffectiveTransactionDate,
   isValidWompiEventChecksum,
 } from "@/lib/wompi-webhook";
 import { POST } from "./route";
@@ -89,6 +90,28 @@ describe("Wompi webhook helpers", () => {
         payment_method: { extra: { payment_source_id: "src_nested" } },
       })
     ).toBe("src_nested");
+  });
+});
+
+describe("Wompi effective transaction date", () => {
+  it("prefers finalized_at over the event timestamp", () => {
+    const receivedAt = new Date("2026-08-18T14:00:00.000Z");
+    const effectiveDate = getWompiEffectiveTransactionDate(
+      { id: "tx-1", finalized_at: "2026-08-01T13:35:44.000Z" },
+      1530291411,
+      receivedAt
+    );
+
+    expect(effectiveDate.toISOString()).toBe("2026-08-01T13:35:44.000Z");
+  });
+
+  it("accepts Wompi timestamps in seconds and milliseconds", () => {
+    expect(getWompiEffectiveTransactionDate({ id: "tx-1" }, 1530291411).toISOString()).toBe(
+      "2018-06-29T16:56:51.000Z"
+    );
+    expect(getWompiEffectiveTransactionDate({ id: "tx-1" }, 1785591344000).toISOString()).toBe(
+      "2026-08-01T13:35:44.000Z"
+    );
   });
 });
 
@@ -198,6 +221,7 @@ describe("POST /api/wompi/webhook", () => {
           id: "tx-2",
           status: "APPROVED",
           reference: "HPE-TEST-202607",
+          finalized_at: "2026-08-01T13:35:44.000Z",
           amount_in_cents: 150000,
           currency: "COP",
           payment_source_id: "src-1",
@@ -224,8 +248,98 @@ describe("POST /api/wompi/webhook", () => {
     expect(response.status).toBe(200);
     expect(subscriptionUpdate).toMatchObject({
       status: "active",
-      next_payment_date: "2026-08-16T12:00:00.000Z",
+      next_payment_date: "2026-09-16T12:00:00.000Z",
       processed_transaction_ids: ["tx-2"],
     });
+  });
+  it("does not move a manually advanced next payment date backwards", async () => {
+    subscriptionRecord = {
+      id: "sub-1",
+      reference: "HPE-TEST",
+      next_payment_date: "2026-10-16T12:00:00.000Z",
+      preferred_payment_day: 16,
+      processed_transaction_ids: [],
+      wompi_payment_source_id: "src-1",
+    };
+    paymentRecord = { id: "pay-1" };
+
+    const payload = {
+      event: "transaction.updated",
+      data: {
+        transaction: {
+          id: "tx-delayed",
+          status: "APPROVED",
+          reference: "HPE-TEST-202608",
+          finalized_at: "2026-08-01T13:35:44.000Z",
+          amount_in_cents: 150000,
+          currency: "COP",
+          payment_source_id: "src-1",
+        },
+      },
+      signature: {
+        properties: ["transaction.id", "transaction.status", "transaction.reference"],
+        checksum: "",
+      },
+      timestamp: 1785591344000,
+    };
+    payload.signature.checksum = computeWompiEventChecksum(payload, "prod_events_test") ?? "";
+
+    const response = await POST(
+      new Request("https://example.test/api/wompi/webhook", {
+        method: "POST",
+        headers: { "x-event-checksum": payload.signature.checksum },
+        body: JSON.stringify(payload),
+      })
+    );
+
+    const subscriptionUpdate = updateCalls.find((call) => call.table === "subscriptions")?.payload;
+
+    expect(response.status).toBe(200);
+    expect(subscriptionUpdate).toMatchObject({ next_payment_date: "2026-10-16T12:00:00.000Z" });
+  });
+  it("does not advance the schedule twice when Wompi replays the same transaction", async () => {
+    subscriptionRecord = {
+      id: "sub-1",
+      reference: "HPE-TEST",
+      next_payment_date: "2026-09-16T12:00:00.000Z",
+      preferred_payment_day: 16,
+      processed_transaction_ids: ["tx-replay"],
+      wompi_payment_source_id: "src-1",
+    };
+    paymentRecord = { id: "pay-1" };
+
+    const payload = {
+      event: "transaction.updated",
+      data: {
+        transaction: {
+          id: "tx-replay",
+          status: "APPROVED",
+          reference: "HPE-TEST-202608",
+          finalized_at: "2026-08-01T13:35:44.000Z",
+          amount_in_cents: 150000,
+          currency: "COP",
+          payment_source_id: "src-1",
+        },
+      },
+      signature: {
+        properties: ["transaction.id", "transaction.status", "transaction.reference"],
+        checksum: "",
+      },
+      timestamp: 1785591344000,
+    };
+    payload.signature.checksum = computeWompiEventChecksum(payload, "prod_events_test") ?? "";
+
+    const response = await POST(
+      new Request("https://example.test/api/wompi/webhook", {
+        method: "POST",
+        headers: { "x-event-checksum": payload.signature.checksum },
+        body: JSON.stringify(payload),
+      })
+    );
+
+    const subscriptionUpdate = updateCalls.find((call) => call.table === "subscriptions")?.payload;
+
+    expect(response.status).toBe(200);
+    expect(subscriptionUpdate).not.toHaveProperty("next_payment_date");
   });
 });

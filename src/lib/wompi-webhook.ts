@@ -3,6 +3,8 @@ import crypto from "crypto";
 export type WompiTransaction = {
   id: string;
   status?: string;
+  finalized_at?: string | null;
+  finalizedAt?: string | null;
   amount_in_cents?: number;
   amountInCents?: number;
   currency?: string;
@@ -24,6 +26,38 @@ export type WompiEventPayload = {
   };
   timestamp?: number | string;
 };
+
+function validDate(value: unknown) {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value !== "string" || !value.trim()) return null;
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function getWompiEffectiveTransactionDate(
+  transaction: WompiTransaction | undefined,
+  eventTimestamp: WompiEventPayload["timestamp"],
+  receivedAt = new Date()
+) {
+  const finalizedAt = validDate(transaction?.finalized_at ?? transaction?.finalizedAt);
+  if (finalizedAt) return finalizedAt;
+
+  if (typeof eventTimestamp === "number" || typeof eventTimestamp === "string") {
+    const numericTimestamp = Number(eventTimestamp);
+    if (Number.isFinite(numericTimestamp)) {
+      // Wompi has documented timestamps in both Unix seconds and milliseconds.
+      const milliseconds = Math.abs(numericTimestamp) < 100_000_000_000 ? numericTimestamp * 1000 : numericTimestamp;
+      const eventDate = new Date(milliseconds);
+      if (!Number.isNaN(eventDate.getTime())) return eventDate;
+    }
+
+    const parsedTimestamp = validDate(eventTimestamp);
+    if (parsedTimestamp) return parsedTimestamp;
+  }
+
+  return receivedAt;
+}
 
 function safeCompare(a: string, b: string | null | undefined) {
   if (!b) return false;

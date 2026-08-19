@@ -5,6 +5,10 @@ on:
     - cron: "0 12 * * *" # 7:00 a.m. Colombia (UTC-5)
   workflow_dispatch:
 
+concurrency:
+  group: monthly-charges-production
+  cancel-in-progress: false
+
 jobs:
   run:
     runs-on: ubuntu-latest
