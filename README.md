@@ -109,7 +109,10 @@ Notas:
 
 ## Cobros recurrentes
 
-El workflow `.github/workflows/monthly-charges.yml` corre una vez al dia:
+El workflow `.github/workflows/monthly-charges.yml` corre una vez al dia y no permite dos ejecuciones simultaneas:
+
+- `concurrency = monthly-charges-production`
+- un run en curso nunca se cancela por otro trigger
 
 ```txt
 7:00 a.m. Colombia
@@ -123,7 +126,13 @@ El script `scripts/run-monthly-charges.mjs` busca suscripciones:
 - `wompi_payment_source_id` no nulo
 - `next_payment_date <= now()`
 
-Si encuentra una suscripcion vencida, crea una transaccion en Wompi con la fuente de pago guardada. El script evita duplicar cobros si ya existe un pago `approved` o `pending` en el mes actual.
+Todas las fechas se guardan en Supabase como UTC (`timestamptz`), pero las reglas comerciales usan `America/Bogota`: el mes empieza a las `00:00` Colombia (`05:00 UTC`) y termina al inicio del mes siguiente. Esto evita que un pago de la noche del ultimo dia colombiano se clasifique en el mes equivocado solo porque en UTC ya cambio de fecha.
+
+Si encuentra una suscripcion vencida, el script crea una transaccion en Wompi con la fuente de pago guardada. Antes de hacerlo busca pagos `approved` o `pending` dentro del mes colombiano actual:
+
+- un pago `pending` bloquea un nuevo intento hasta que Wompi confirme su estado;
+- un pago `approved` con `next_payment_date` vencido repara automaticamente la siguiente fecha;
+- si no puede comprobar pagos existentes, no cobra a ciegas y deja un registro en `audit_logs`.
 
 Las suscripciones mensuales pueden guardar `preferred_payment_day` con uno de estos valores: `1`, `6`, `16` o `28`. El primer cobro se realiza al crear la suscripcion; los siguientes cobros se programan desde el mes siguiente en el dia elegido, a las 7:00 a.m. Colombia.
 
