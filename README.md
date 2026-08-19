@@ -10,6 +10,7 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
 - Nequi mensual: deshabilitado por ahora.
 - Persistencia: Supabase.
 - Deploy esperado: Vercel.
+- Deploy de produccion: cada push a `main` activa Vercel.
 - Cobros recurrentes: GitHub Actions `Monthly Charges`.
 - Keepalive Supabase: GitHub Actions `Keepalive`.
 
