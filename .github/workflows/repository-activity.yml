@@ -1,0 +1,43 @@
+name: Refresh Repository Activity
+
+on:
+  schedule:
+    # Twice a month keeps scheduled workflows comfortably inside GitHub's
+    # 60-day inactivity window for public repositories.
+    - cron: "17 13 1,15 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-repository-activity
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Refresh README activity marker
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          marker="<!-- repository-activity: $(date -u +'%Y-%m-%dT%H:%M:%SZ') -->"
+
+          if grep -q '<!-- repository-activity:' README.md; then
+            sed -i "s|<!-- repository-activity:.*-->|${marker}|" README.md
+          else
+            printf '\n%s\n' "${marker}" >> README.md
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "chore: refresh repository activity"
+          git push origin HEAD:main

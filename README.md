@@ -201,3 +201,5 @@ Antes de hacer push a un repo publico:
 - Verifica `git status --short`.
 - No subas `.env.local`, backups `.backup`, dumps `.sql`, capturas con llaves ni archivos de Supabase descargados.
 - Revisa que los workflows usen `environment: Production` si dependen de environment secrets.
+
+<!-- repository-activity: managed-by-github-actions -->
