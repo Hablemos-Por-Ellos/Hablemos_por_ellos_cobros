@@ -202,4 +202,4 @@ Antes de hacer push a un repo publico:
 - No subas `.env.local`, backups `.backup`, dumps `.sql`, capturas con llaves ni archivos de Supabase descargados.
 - Revisa que los workflows usen `environment: Production` si dependen de environment secrets.
 
-<!-- repository-activity: managed-by-github-actions -->
+<!-- repository-activity: 2026-08-23T02:34:49Z -->
