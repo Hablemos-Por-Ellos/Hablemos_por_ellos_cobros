@@ -1,9 +1,9 @@
 # Panel administrativo: preparacion local
 
-Version 0.3.0, preparacion local. No autoriza aplicar la migracion en produccion,
-crear cuentas productivas, desplegar ni habilitar cobros. La vista actual usa
-datos ficticios. Auth real se ensayo en otro laboratorio local con cuentas
-ficticias; Wompi Sandbox financiero y la habilitacion productiva siguen pendientes.
+Version 0.3.0, preparacion y Preview ficticia. Este documento no autoriza aplicar
+la migracion productiva, crear cuentas reales ni habilitar cobros. Auth real se
+ensayo en el laboratorio local con cuentas ficticias; el ensayo financiero
+Sandbox paso, pero no demuestra entrega automatica del webhook ni produccion.
 Ver `docs/LOCAL_AUTH_VALIDATION.md` y `docs/VALIDATION_0.3.0_LOCAL.md`.
 
 ## 1. Variables locales
@@ -65,11 +65,12 @@ solo superadmin esta autorizado para gestionar accesos. Esta politica no implica
 que exista ya una pantalla de gestion de permisos. Las APIs comprueban sesion,
 UUID, rol, usuario activo, `aal2`, version y TOTP reciente en servidor.
 
-Estado al 2026-10-04: el correo del segundo administrador todavia no esta
-disponible. No crear ni invitar una identidad supuesta. Su alta queda pendiente
-de recibir el correo y autorizarla; no es necesario inventarla para preparar
-la cuenta del superadministrador. No hay cuentas productivas creadas por este
-paquete ni se han definido contrasenas por sus titulares en esta etapa.
+Estado al 2026-10-04: ambos correos administrativos estan confirmados privadamente.
+No hay cuentas productivas creadas ni invitaciones enviadas por este paquete.
+La Preview ficticia no usa Auth productivo ni envia enlaces a esos contactos.
+Antes de preparar las invitaciones reales, comprobar URLs exactas del dominio
+productivo para que nadie reciba un enlace de Preview. Cada titular define su
+contrasena y enrola su propio Authenticator; no hacerlo en su nombre.
 
 Guardar abre el resumen Antes/Despues y la confirmacion. Volver, cerrar o Escape
 no guardan. Confirmar no genera un cobro ni modifica pagos anteriores.
@@ -88,12 +89,12 @@ el fallo y no se afirma que los JWT anteriores hayan quedado invalidados.
 
 ## 5. Publicacion futura
 
-Restriccion actual: no modificar variables, configuracion ni despliegues de
-Vercel. Los pasos siguientes no se ejecutan hasta recibir la autorizacion
-correspondiente. Un push a una rama conectada tambien puede desplegar; no usarlo
-para eludir esta restriccion. La consulta de metadata encontro variables
-productivas en `All Environments`, sin variables compartidas vinculadas;
-la preview desconectada debe verificarse antes de publicar.
+Estado vigente: el usuario configuro Vercel personalmente. El asistente no guarda
+variables ni cambia protecciones. La publicacion de rama y dev fue autorizada;
+sus despliegues Preview estan en demo, sin credenciales privadas productivas.
+main permanece intacta y el corte productivo sigue pendiente. La autorizacion
+de Preview no permite habilitar cobros ni enviar invitaciones productivas.
+Ver `docs/CUTOVER_2026-10-04.md` para evidencia y limites de las pruebas remotas.
 
 1. Completar pruebas locales/sandbox y revision independiente. Un build correcto
    no prueba Auth, RLS ni Wompi externos.
