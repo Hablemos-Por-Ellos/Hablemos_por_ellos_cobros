@@ -6,6 +6,9 @@
   explicit user approval. Keep the real admin subtitle and public donation
   routes unchanged; verify Production cannot enable the administrative demo.
   Repeat 901 tests, lint and isolated demo build; no production data writes.
+- 2026-10-04: observe the corrected demo header at 320/360 px in READY Preview
+  and fast-forward the candidate into dev. Verify dev deploys as Preview with
+  fictitious data, while main remains unchanged; production cutover is pending.
 - 2026-10-04: publish the candidate branch and observe a READY demo Preview.
   Verify masked fictional data, filters and three browser-only mutations with
   no administrative API or provider requests. Record incomplete remote API

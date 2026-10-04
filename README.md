@@ -41,8 +41,10 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
   recibio 302 y el navegador bloqueo esa navegacion. No se uso un bypass.
   El subtitulo demo movil se corrigio con autorizacion, solo en el admin
   ficticio; no cambia /donar ni el admin real. Validacion local posterior:
-  901 pruebas en 37 archivos, lint y build demo correctos. La nueva Preview
-  de ese subtitulo todavia requiere comprobacion visual.
+  901 pruebas en 37 archivos, lint y build demo correctos. Nueva Preview
+  `3e773ad` READY; subtitulo visible a 320 y 360 px sin scroll horizontal.
+  `dev` incorpora ese candidato por fast-forward y su Preview tambien esta
+  READY con admin ficticio. `main` permanece sin cambios.
   Ver el informe de corte para el alcance y los pendientes.
 - Restriccion posterior: no crear recursos adicionales; usar las cuentas desde
   la sesion correcta del navegador, sin conectores de cuentas. No se creo el
