@@ -1,0 +1,63 @@
+-- v0.3.0 | 2026-10-03. ALTERNATIVE fresh fixture, not after hardening_smoke/regression.
+-- Parent prepares a NEW hpe_lab with base_schema.sql, then supplies the actual migration
+-- SHA-256 via set_config('app.migration_digest', <computed digest>, false) in this session.
+\set ON_ERROR_STOP on
+do $$ begin
+  if current_database() <> 'hpe_lab' or to_regclass('public.payment_admin_migrations') is not null then
+    raise exception 'FRESH_DISPOSABLE_PARENT_FIXTURE_REQUIRED';
+  end if;
+end $$;
+\ir ../preflight/payment_admin_preflight.sql
+
+-- Emulate optional columns ALREADY present in a historic installation. These become
+-- original columns for the migration's preservation assertions, including the NULL array.
+alter table public.subscriptions add column preferred_payment_day integer;
+alter table public.subscriptions add column processed_transaction_ids text[];
+alter table public.payments add column approved_at timestamptz;
+update public.subscriptions set processed_transaction_ids = array['tx-historic-10000']
+where id = '20000000-0000-0000-0000-000000000090';
+update public.payments set approved_at = '2026-01-01T15:00:00Z'
+where id = '70000000-0000-0000-0000-000000000090';
+insert into public.subscriptions(id,donor_id,amount,reference,processed_transaction_ids)
+values ('20000000-0000-0000-0000-000000000091','10000000-0000-0000-0000-000000000090',
+  15000,'HPE-NULL-ORIGINAL-ARRAY',null);
+insert into public.payments(id,subscription_id,amount,status,wompi_transaction_id,approved_at)
+values ('70000000-0000-0000-0000-000000000092','20000000-0000-0000-0000-000000000091',
+  15000,'approved','tx-invalid-approved-at','infinity');
+insert into public.webhook_events(id,transaction_id,event_type,raw)
+values ('60000000-0000-0000-0000-000000000093','tx-historic-10000','transaction.updated',
+  '{"transaction_id":"tx-historic-10000","event_type":"transaction.updated","evidence_fixture":"applied"}');
+insert into public.webhook_events(id,transaction_id,event_type,raw)
+values ('60000000-0000-0000-0000-000000000094','tx-invalid-approved-at','transaction.updated',
+  '{"transaction_id":"tx-invalid-approved-at","event_type":"transaction.updated","timestamp":1789844400,
+    "transaction":{"id":"tx-invalid-approved-at","status":"APPROVED","finalized_at":"2026-09-19T15:00:00Z"}}');
+\ir ../preflight/payment_admin_preflight.sql
+\ir ../migrations/202609190001_payment_and_admin_hardening.sql
+
+do $$ declare v_result jsonb; begin
+  if not exists (select 1 from public.payments where id = '70000000-0000-0000-0000-000000000090'
+    and approved_at = '2026-01-01T15:00:00Z'::timestamptz
+    and provider_effective_at = approved_at and not billing_review_required) then
+    raise exception 'VALID_APPROVED_AT_BACKFILL_FAILED';
+  end if;
+  if not exists (select 1 from public.payments where id = '70000000-0000-0000-0000-000000000092'
+    and approved_at = 'infinity'::timestamptz and provider_effective_at is null and billing_review_required) then
+    raise exception 'UNVERIFIED_RAW_OR_INVALID_DATE_WAS_USED_AS_APPROVAL';
+  end if;
+  if not exists (select 1 from public.subscriptions where id = '20000000-0000-0000-0000-000000000091'
+    and processed_transaction_ids is null) then
+    raise exception 'ORIGINAL_NULL_ARRAY_WAS_REWRITTEN';
+  end if;
+  if (select processing_state from public.webhook_events where id = '60000000-0000-0000-0000-000000000093') <> 'legacy_applied'
+    or (select processing_state from public.webhook_events where id = '60000000-0000-0000-0000-000000000094') <> 'needs_review'
+    or (select processing_state from public.webhook_events where id = '60000000-0000-0000-0000-000000000090') <> 'received' then
+    raise exception 'LEGACY_APPLIED_RECEIVED_REVIEW_MAPPING_FAILED';
+  end if;
+  v_result := public.apply_verified_wompi_event('key-legacy-evidence','tx-historic-10000','transaction.updated',
+    'HPE-LEGACY','fixture-legacy-source',10000,'COP','approved','2026-01-01T15:00:00Z','2027-12-16T12:00:00Z','{}');
+  if v_result ->> 'result' <> 'processed' or v_result ->> 'legacyApplied' <> 'true'
+    or (select next_payment_date from public.subscriptions where id = '20000000-0000-0000-0000-000000000090') <> '2026-10-16T12:00:00Z'::timestamptz then
+    raise exception 'LEGACY_APPLIED_ENRICHMENT_FAILED_OR_ALTERED_AGENDA';
+  end if;
+end $$;
+\ir ../postflight/payment_admin_postflight.sql

@@ -1,39 +1,46 @@
 {
   "name": "mini-app-hablemospor-ellos",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint src scripts middleware.ts vitest.config.ts --ext .ts,.tsx,.mjs --no-cache",
     "test": "vitest run",
     "test:watch": "vitest",
     "monthly-charges": "node scripts/run-monthly-charges.mjs"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.45.0",
     "clsx": "^2.1.1",
+    "lucide-react": "^1.38.0",
+    "next": "15.5.24",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "tailwind-merge": "^2.3.0",
-    "next": "14.2.7",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.4.5",
-    "@testing-library/react": "^15.0.7",
-    "@testing-library/user-event": "^14.5.2",
-    "@types/node": "20.12.12",
-    "@types/react": "18.3.3",
-    "@types/react-dom": "18.3.0",
-    "autoprefixer": "^10.4.19",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.7",
+    "@types/node": "22.15.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "autoprefixer": "10.6.1",
     "eslint": "^8.57.0",
-    "eslint-config-next": "14.2.7",
-    "jsdom": "^24.0.0",
-    "postcss": "^8.4.38",
-    "tailwindcss": "^3.4.10",
-    "typescript": "5.5.3",
-    "vitest": "^1.6.0"
+    "eslint-config-next": "15.5.24",
+    "jsdom": "27.0.1",
+    "jose": "6.2.12",
+    "pg": "8.23.1",
+    "postcss": "8.5.28",
+    "tailwindcss": "3.4.17",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
+  },
+  "overrides": {
+    "postcss": "8.5.28"
   }
 }

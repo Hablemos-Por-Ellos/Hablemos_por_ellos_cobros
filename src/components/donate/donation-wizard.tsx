@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { DonorFormStep } from "./donor-form-step";
-import { PaymentStep } from "./payment-step";
+import { PaymentStep, type CheckoutSession } from "./payment-step";
 import { ConfirmationStep } from "./confirmation-step";
 import { Stepper } from "./stepper";
 import { Toast } from "@/components/ui/toast";
@@ -34,9 +34,21 @@ type WompiAuthorizationData = {
   transactionId?: string;
   maskedDetails: string;
   reference: string;
-  acceptanceToken?: string;
-  acceptPersonalAuth?: string;
 };
+
+class DonationRequestError extends Error {
+  status: number;
+  code: string | null;
+  transactionId: string | null;
+
+  constructor(message: string, status: number, code: string | null, transactionId: string | null) {
+    super(message);
+    this.name = "DonationRequestError";
+    this.status = status;
+    this.code = code;
+    this.transactionId = transactionId;
+  }
+}
 
 export function DonationWizard() {
   const [step, setStep] = useState<Step>(1);
@@ -46,6 +58,8 @@ export function DonationWizard() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [confirmationStatus, setConfirmationStatus] = useState<"confirmed" | "pending">("confirmed");
   const [paymentSummary, setPaymentSummary] = useState("Tarjeta •••• 4242");
+  const [checkout, setCheckout] = useState<CheckoutSession | null>(null);
+  const [pendingAuthorization, setPendingAuthorization] = useState<WompiAuthorizationData | null>(null);
 
   // Remove any stuck Wompi overlay when step changes or component unmounts
   useEffect(() => {
@@ -76,8 +90,17 @@ export function DonationWizard() {
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error?.message ?? "No pudimos guardar la suscripción");
+        const error = await response.json().catch(() => ({})) as {
+          message?: string;
+          code?: string;
+          transactionId?: string;
+        };
+        throw new DonationRequestError(
+          error?.message ?? "No pudimos guardar la suscripción",
+          response.status,
+          error?.code ?? null,
+          error?.transactionId ?? null
+        );
       }
 
       return response.json();
@@ -89,7 +112,11 @@ export function DonationWizard() {
     try {
       setIsLoading(true);
       setDonor(values);
-      await persistDonation("draft", { donor: values });
+      const result = await persistDonation("draft", { donor: values });
+      if (!result?.checkout?.token || !result?.checkout?.reference || !result?.checkout?.signature) {
+        throw new Error("No pudimos preparar una sesion de pago segura.");
+      }
+      setCheckout(result.checkout as CheckoutSession);
       setToast({ message: "Datos guardados. Sigamos al pago seguro", type: "success" });
       await sleep(300);
       setStep(2);
@@ -100,16 +127,15 @@ export function DonationWizard() {
     }
   };
 
-  const handlePaymentAuthorized = async (
-    wompiData: WompiAuthorizationData
-  ) => {
+  const confirmAuthorization = async (paymentData: WompiAuthorizationData) => {
     try {
       setIsLoading(true);
-      if (!wompiData?.token) {
+      if (!paymentData?.token) {
         throw new Error("No recibimos confirmaci\u00f3n del pago con Wompi. Int\u00e9ntalo de nuevo.");
       }
-      const paymentData = wompiData;
+      if (!checkout) throw new Error("La sesion de pago no esta lista.");
       const result = await persistDonation("confirm", undefined, {
+        checkoutToken: checkout.token,
         wompi: {
           token: paymentData.token,
           cardToken: paymentData.cardToken,
@@ -118,24 +144,63 @@ export function DonationWizard() {
           transactionId: paymentData.transactionId,
           reference: paymentData.reference,
           maskedDetails: paymentData.maskedDetails,
-          acceptanceToken: paymentData.acceptanceToken,
-          acceptPersonalAuth: paymentData.acceptPersonalAuth,
         },
       });
       setPaymentSummary(paymentData.maskedDetails);
-      setConfirmationStatus(result?.status === "subscription_created" ? "confirmed" : "pending");
+      setPendingAuthorization(null);
+      const confirmed = result?.status === "subscription_created";
+      setConfirmationStatus(confirmed ? "confirmed" : "pending");
       setStep(3);
-      setToast({ message: "¡Suscripción creada!", type: "success" });
+      setToast({
+        message: confirmed
+          ? donor.isRecurring
+            ? "¡Suscripción creada!"
+            : "¡Donación confirmada!"
+          : "Wompi está confirmando tu pago.",
+        type: confirmed ? "success" : "info",
+      });
     } catch (error) {
-      setToast({ message: (error as Error).message, type: "error" });
+      const restartRequired = error instanceof DonationRequestError
+        && (error.status === 402 || error.code === "checkout_restart_required");
+      if (restartRequired) {
+        setPendingAuthorization(null);
+        setCheckout(null);
+        setStep(1);
+      } else {
+        setPendingAuthorization({
+          ...paymentData,
+          transactionId: error instanceof DonationRequestError && error.transactionId
+            ? error.transactionId
+            : paymentData.transactionId,
+        });
+      }
+      setToast({
+        message: restartRequired
+          ? (error as Error).message
+          : "Estamos conciliando este mismo intento. No abras otro pago; usa Reintentar confirmación.",
+        type: restartRequired ? "error" : "info",
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleCheckoutStarted = async ({ reference }: { reference: string }) => {
+  const handlePaymentAuthorized = async (wompiData: WompiAuthorizationData) => {
+    if (pendingAuthorization) return;
+    setPendingAuthorization(wompiData);
+    await confirmAuthorization(wompiData);
+  };
+
+  const handleRetryConfirmation = async () => {
+    if (!pendingAuthorization || isLoading) return;
+    await confirmAuthorization(pendingAuthorization);
+  };
+
+  const handleCheckoutStarted = async () => {
+    if (!checkout) throw new Error("La sesion de pago no esta lista.");
     await persistDonation("checkout", undefined, {
-      wompi: { reference },
+      checkoutToken: checkout.token,
+      wompi: { reference: checkout.reference },
     });
   };
 
@@ -144,6 +209,9 @@ export function DonationWizard() {
     setDonor(INITIAL_DONOR);
     setPaymentMethod("card");
     setPaymentSummary("Tarjeta •••• 4242");
+    setConfirmationStatus("confirmed");
+    setCheckout(null);
+    setPendingAuthorization(null);
   };
 
   return (
@@ -152,16 +220,19 @@ export function DonationWizard() {
 
       {step === 1 && <DonorFormStep values={donor} onChange={setDonor} onSubmit={handleDraftSubmit} loading={isLoading} />}
 
-      {step === 2 && (
+      {step === 2 && checkout && (
         <PaymentStep
           donor={donor}
           amount={donor.amount}
           isRecurring={donor.isRecurring}
           paymentMethod={paymentMethod}
+          checkout={checkout}
           onMethodChange={setPaymentMethod}
           onBack={() => setStep(1)}
           onCheckoutStarted={handleCheckoutStarted}
           onAuthorized={handlePaymentAuthorized}
+          reconciliationPending={Boolean(pendingAuthorization)}
+          onRetryConfirmation={handleRetryConfirmation}
           loading={isLoading}
         />
       )}

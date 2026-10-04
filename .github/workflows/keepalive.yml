@@ -6,13 +6,22 @@ on:
     - cron: "0 3 */3 * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: keepalive-production
+  cancel-in-progress: false
+
 jobs:
   ping:
+    if: github.ref == 'refs/heads/main'
     environment: Production
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Call keepalive endpoint
         run: |
-          curl -fsSL \
+          curl -fsSL --connect-timeout 10 --max-time 30 --retry 2 --retry-all-errors \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "${{ secrets.KEEPALIVE_URL }}"

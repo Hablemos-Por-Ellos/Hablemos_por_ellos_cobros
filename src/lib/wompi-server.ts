@@ -10,6 +10,9 @@ import {
 type WompiJson = Record<string, any>;
 type SafeWompiValue = string | number | boolean | null | SafeWompiValue[] | { [key: string]: SafeWompiValue };
 
+const WOMPI_READ_TIMEOUT_MS = 10_000;
+const WOMPI_WRITE_TIMEOUT_MS = 20_000;
+
 export type WompiAcceptance = {
   acceptanceToken: string;
   acceptPersonalAuth: string;
@@ -27,6 +30,12 @@ export type WompiPaymentSource = {
 export type WompiTransactionResult = {
   id: string;
   status: string;
+  reference?: string;
+  amountInCents?: number;
+  currency?: string;
+  paymentSourceId?: string | null;
+  paymentMethodType?: string | null;
+  finalizedAt?: string | null;
 };
 
 function redactWompiText(value: string) {
@@ -94,6 +103,8 @@ function requireWompiPrivateKey() {
     const suffix = WOMPI_ENV === "prod" ? "PROD" : "SANDBOX";
     throw new Error(`Configura WOMPI_PRIVATE_KEY_${suffix} en el servidor.`);
   }
+  const expectedPrefix = WOMPI_ENV === "prod" ? "prv_prod_" : "prv_test_";
+  if (!key.startsWith(expectedPrefix)) throw new Error("WOMPI_PRIVATE_KEY_ENV_MISMATCH");
   return key;
 }
 
@@ -103,6 +114,8 @@ function requireWompiPublicKey() {
     const suffix = WOMPI_ENV === "prod" ? "PROD" : "SANDBOX";
     throw new Error(`Configura NEXT_PUBLIC_WOMPI_PUBLIC_KEY_${suffix}.`);
   }
+  const expectedPrefix = WOMPI_ENV === "prod" ? "pub_prod_" : "pub_test_";
+  if (!key.startsWith(expectedPrefix)) throw new Error("WOMPI_PUBLIC_KEY_ENV_MISMATCH");
   return key;
 }
 
@@ -112,6 +125,8 @@ function requireWompiIntegritySecret() {
     const suffix = WOMPI_ENV === "prod" ? "PROD" : "SANDBOX";
     throw new Error(`Configura WOMPI_INTEGRITY_SECRET_${suffix} en el servidor.`);
   }
+  const expectedPrefix = WOMPI_ENV === "prod" ? "prod_integrity_" : "test_integrity_";
+  if (!secret.startsWith(expectedPrefix)) throw new Error("WOMPI_INTEGRITY_SECRET_ENV_MISMATCH");
   return secret;
 }
 
@@ -122,8 +137,10 @@ export function createWompiIntegritySignature(reference: string, amountInCents: 
 
 export async function getWompiAcceptance(): Promise<WompiAcceptance> {
   const publicKey = requireWompiPublicKey();
-  const response = await fetch(`${getWompiApiBaseUrl()}/merchants/${encodeURIComponent(publicKey)}`, {
+  const response = await fetch(`${getWompiApiBaseUrl()}/merchants/info`, {
+    headers: { "x-merchant-public-key": publicKey },
     cache: "no-store",
+    signal: AbortSignal.timeout(WOMPI_READ_TIMEOUT_MS),
   });
   const json = (await response.json().catch(() => ({}))) as WompiJson;
 
@@ -164,6 +181,7 @@ export async function createWompiPaymentSource(params: {
       acceptance_token: params.acceptanceToken,
       accept_personal_auth: params.acceptPersonalAuth,
     }),
+    signal: AbortSignal.timeout(WOMPI_WRITE_TIMEOUT_MS),
   });
 
   const json = (await response.json().catch(() => ({}))) as WompiJson;
@@ -217,6 +235,7 @@ export async function createWompiTransaction(params: {
         installments: 1,
       },
     }),
+    signal: AbortSignal.timeout(WOMPI_WRITE_TIMEOUT_MS),
   });
 
   const json = (await response.json().catch(() => ({}))) as WompiJson;
@@ -230,5 +249,58 @@ export async function createWompiTransaction(params: {
   return {
     id: String(id),
     status: String(data?.status ?? "PENDING").toLowerCase(),
+    reference: typeof data?.reference === "string" ? data.reference : params.reference,
+    amountInCents: typeof data?.amount_in_cents === "number" ? data.amount_in_cents : params.amountInCents,
+    currency: typeof data?.currency === "string" ? data.currency : params.currency,
+    paymentSourceId: data?.payment_source_id == null ? params.paymentSourceId : String(data.payment_source_id),
+    paymentMethodType: typeof data?.payment_method_type === "string"
+      ? data.payment_method_type
+      : typeof data?.payment_method?.type === "string"
+        ? data.payment_method.type
+        : null,
+    finalizedAt: typeof data?.finalized_at === "string" ? data.finalized_at : null,
   };
+}
+
+export async function getWompiTransaction(transactionId: string): Promise<WompiTransactionResult> {
+  const response = await fetch(`${getWompiApiBaseUrl()}/transactions/${encodeURIComponent(transactionId)}`, {
+    headers: { Authorization: `Bearer ${requireWompiPrivateKey()}` },
+    cache: "no-store",
+    signal: AbortSignal.timeout(WOMPI_READ_TIMEOUT_MS),
+  });
+  const json = (await response.json().catch(() => ({}))) as WompiJson;
+  const data = json?.data;
+  if (!response.ok || !data?.id) {
+    throw new Error(`No se pudo verificar la transaccion en Wompi.${wompiErrorHint(json, response.status)}`);
+  }
+
+  return {
+    id: String(data.id),
+    status: String(data.status ?? "PENDING").toLowerCase(),
+    reference: typeof data.reference === "string" ? data.reference : undefined,
+    amountInCents: typeof data.amount_in_cents === "number" ? data.amount_in_cents : undefined,
+    currency: typeof data.currency === "string" ? data.currency : undefined,
+    paymentSourceId: data.payment_source_id == null ? null : String(data.payment_source_id),
+    paymentMethodType: typeof data.payment_method_type === "string"
+      ? data.payment_method_type
+      : typeof data.payment_method?.type === "string"
+        ? data.payment_method.type
+        : null,
+    finalizedAt: typeof data.finalized_at === "string" ? data.finalized_at : null,
+  };
+}
+
+export async function isWompiPaymentSourceAvailable(paymentSourceId: string) {
+  const response = await fetch(`${getWompiApiBaseUrl()}/payment_sources/${encodeURIComponent(paymentSourceId)}`, {
+    headers: { Authorization: `Bearer ${requireWompiPrivateKey()}` },
+    cache: "no-store",
+    signal: AbortSignal.timeout(WOMPI_READ_TIMEOUT_MS),
+  });
+  const json = (await response.json().catch(() => ({}))) as WompiJson;
+  if (!response.ok || !json?.data?.id) {
+    throw new Error(`No se pudo verificar la fuente de pago en Wompi.${wompiErrorHint(json, response.status)}`);
+  }
+  return String(json.data.id) === paymentSourceId
+    && String(json.data.type ?? "").toUpperCase() === "CARD"
+    && String(json.data.status ?? "").toUpperCase() === "AVAILABLE";
 }

@@ -1,27 +1,55 @@
+import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { getServiceSupabaseClient } from "@/lib/supabase-server";
-import { getWompiEventsSecret } from "@/lib/wompi";
-import { getNextMonthlyPaymentDate, isPreferredPaymentDay } from "@/lib/payment-dates";
+import { getWompiEventsSecret, WOMPI_ENV } from "@/lib/wompi";
+import { getNextMonthlyPaymentDate } from "@/lib/payment-dates";
+import { getAppOperationMode } from "@/lib/operation-mode";
+import { paymentSchemaReady } from "@/lib/payment-schema";
+import { makeWompiReceipt } from "@/lib/wompi-receipts";
+import { getWompiTransaction, type WompiTransactionResult } from "@/lib/wompi-server";
 import {
-  extractPaymentSourceId,
-  getWompiEffectiveTransactionDate,
+  getVerifiedWompiEffectiveDate,
   isValidWompiEventChecksum,
   type WompiEventPayload,
   type WompiTransaction,
 } from "@/lib/wompi-webhook";
 
-function subscriptionStatusFromTransaction(status: string) {
-  if (status === "approved") return "active";
-  if (status === "declined" || status === "error" || status === "voided") return "past_due";
-  if (status === "pending") return "pending";
-  return null;
+function eventKey(payload: WompiEventPayload, transactionId: string, checksum: string) {
+  const status = String((payload.data?.transaction as WompiTransaction | undefined)?.status ?? "").toLowerCase();
+  return crypto
+    .createHash("sha256")
+    .update(`${payload.event ?? "unknown"}|${transactionId}|${status}|${payload.timestamp ?? ""}|${checksum}`)
+    .digest("hex");
+}
+
+const RETRYABLE_PAYMENT_FAILURES = new Set(["declined", "error", "voided"]);
+
+function assertCompleteVerifiedTransaction(transaction: WompiTransactionResult, expectedId: string) {
+  if (
+    transaction.id !== expectedId
+    || !transaction.reference
+    || !Number.isInteger(transaction.amountInCents)
+    || !transaction.amountInCents
+    || transaction.amountInCents % 100 !== 0
+    || !transaction.currency
+  ) {
+    throw new Error("WOMPI_TRANSACTION_INCOMPLETE");
+  }
+}
+
+function reconciliationEventKey(transaction: WompiTransactionResult) {
+  return crypto
+    .createHash("sha256")
+    .update(`server-reconciliation|${transaction.id}|${transaction.status}|${transaction.finalizedAt ?? ""}`)
+    .digest("hex");
 }
 
 export async function POST(request: Request) {
+  const contentLength = Number(request.headers.get("content-length") ?? "0");
+  if (contentLength > 131072) return NextResponse.json({ message: "Evento demasiado grande" }, { status: 413 });
   const rawBody = await request.text().catch(() => "");
-  if (!rawBody) {
-    return NextResponse.json({ message: "Solicitud invalida" }, { status: 400 });
-  }
+  if (!rawBody) return NextResponse.json({ message: "Solicitud invalida" }, { status: 400 });
+  if (Buffer.byteLength(rawBody) > 131072) return NextResponse.json({ message: "Evento demasiado grande" }, { status: 413 });
 
   let payload: WompiEventPayload;
   try {
@@ -30,189 +58,178 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "JSON invalido" }, { status: 400 });
   }
 
-  const wompiSecret = getWompiEventsSecret();
-  if (!wompiSecret) {
-    return NextResponse.json({ message: "Configura WOMPI_EVENTS_SECRET para validar webhooks" }, { status: 500 });
+  const secret = getWompiEventsSecret();
+  const expectedSecretPrefix = WOMPI_ENV === "prod" ? "prod_events_" : "test_events_";
+  if (!secret || !secret.startsWith(expectedSecretPrefix)) {
+    return NextResponse.json({ message: "Webhook no configurado" }, { status: 503 });
   }
-
-  if (!isValidWompiEventChecksum(payload, request.headers.get("x-event-checksum"), wompiSecret)) {
+  const receivedChecksum = request.headers.get("x-event-checksum") ?? payload.signature?.checksum ?? "";
+  if (!isValidWompiEventChecksum(payload, receivedChecksum, secret)) {
     return NextResponse.json({ message: "Firma invalida" }, { status: 401 });
   }
+  if (payload.environment !== (WOMPI_ENV === "prod" ? "prod" : "test")) {
+    return NextResponse.json({ message: "Ambiente invalido" }, { status: 401 });
+  }
 
-  const transaction = payload?.data?.transaction as WompiTransaction | undefined;
+  const eventTransaction = payload.data?.transaction as WompiTransaction | undefined;
   const supabase = getServiceSupabaseClient();
-  const allowDemo = process.env.ALLOW_DEMO_MODE === "true" || process.env.NODE_ENV !== "production";
+  if (!supabase) return NextResponse.json({ message: "Servicio de datos no configurado" }, { status: 503 });
 
-  if (!supabase) {
-    if (allowDemo) {
-      return NextResponse.json({ message: "Webhook recibido en modo demostracion" }, { status: 200 });
-    }
-    return NextResponse.json(
-      { message: "Configuracion invalida en produccion: falta SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY" },
-      { status: 500 }
-    );
-  }
-
-  const tx = transaction;
-  const receivedAt = new Date();
-  const effectiveTransactionDate = getWompiEffectiveTransactionDate(tx, payload.timestamp, receivedAt);
-  const paymentSourceId = tx ? extractPaymentSourceId(tx) : null;
-  const wompiTransactionId = tx?.id ?? null;
-  const amountInCents = tx?.amount_in_cents ?? tx?.amountInCents ?? null;
-  const amountCop = typeof amountInCents === "number" ? Math.round(amountInCents / 100) : null;
-  const status = (tx?.status ?? "").toLowerCase();
-  const reference = tx?.reference ?? null;
-  const eventType = payload?.event ?? null;
-
-  const sanitizedEvent = {
-    transaction_id: wompiTransactionId,
-    event_type: eventType,
-    event: eventType,
-    environment: (payload as Record<string, unknown>)?.environment ?? null,
-    transaction: tx
-      ? {
-          id: tx.id,
-          status: tx.status,
-          reference: tx.reference,
-          amount_in_cents: amountInCents,
-          currency: tx.currency,
-          finalized_at: tx.finalized_at ?? tx.finalizedAt ?? null,
-          payment_source_id: paymentSourceId,
-          payment_method_type: tx.payment_method_type ?? tx.paymentMethodType ?? tx.payment_method?.type ?? tx.paymentMethod?.type,
-        }
-      : null,
-    timestamp: payload.timestamp ?? null,
-    effective_transaction_at: effectiveTransactionDate.toISOString(),
-    received_at: receivedAt.toISOString(),
-  };
-
-  const { error: logError } = await supabase.from("webhook_events").insert({
-    transaction_id: wompiTransactionId,
-    event_type: eventType,
-    raw: sanitizedEvent,
+  const receiptId = crypto.randomUUID();
+  const receipt = makeWompiReceipt(payload, receivedChecksum, rawBody, new Date());
+  const { error: receiptError } = await supabase.from("webhook_events").insert({
+    id: receiptId,
+    transaction_id: null,
+    event_type: null,
+    raw: receipt,
   });
-
-  if (logError && logError.code !== "23505") {
-    return NextResponse.json(
-      { message: "No se pudo registrar el evento", details: logError?.message ?? "unknown" },
-      { status: 500 }
-    );
+  if (receiptError) return NextResponse.json({ message: "No se pudo conservar el evento" }, { status: 503 });
+  if (!eventTransaction?.id || getAppOperationMode() !== "active" || !(await paymentSchemaReady(supabase))) {
+    return NextResponse.json({ message: "Evento conservado para conciliacion", result: "queued" });
   }
 
-  if (!tx?.id) {
-    return NextResponse.json({ message: "Evento guardado sin transaccion" }, { status: 200 });
-  }
+  try {
+    const verified = await getWompiTransaction(eventTransaction.id);
+    try {
+      assertCompleteVerifiedTransaction(verified, eventTransaction.id);
+    } catch {
+      return NextResponse.json({ message: "Transaccion incompleta en Wompi" }, { status: 502 });
+    }
 
-  let subscriptionId: string | null = null;
+    const applyVerifiedTransaction = async (
+      transaction: WompiTransactionResult,
+      effectiveAt: Date | null,
+      key: string,
+      type: string,
+      raw: Record<string, unknown>
+    ) => {
+      const amount = transaction.amountInCents! / 100;
+      const fallbackNextPayment = effectiveAt ? getNextMonthlyPaymentDate(effectiveAt, null) : null;
+      const { data, error } = await supabase.rpc("apply_verified_wompi_event", {
+        p_event_key: key,
+        p_transaction_id: transaction.id,
+        p_event_type: type,
+        p_reference: transaction.reference!,
+        p_payment_source_id: transaction.paymentSourceId ?? null,
+        p_amount: amount,
+        p_currency: transaction.currency!,
+        p_status: transaction.status.toLowerCase(),
+        p_effective_at: effectiveAt?.toISOString() ?? null,
+        p_candidate_next_payment: fallbackNextPayment?.toISOString() ?? null,
+        p_raw: { ...raw, ...(transaction.id === eventTransaction.id ? { receipt_id: receiptId } : {}) },
+      });
+      const result = String(data?.result ?? "");
+      return { ok: !error && ["processed", "duplicate", "review"].includes(result), result, error };
+    };
 
-  if (paymentSourceId) {
-    const { data: subBySource } = await supabase
-      .from("subscriptions")
-      .select("id")
-      .eq("wompi_payment_source_id", paymentSourceId)
+    const { data: currentAttempt, error: currentAttemptError } = await supabase
+      .from("payment_attempts")
+      .select("id, wompi_transaction_id, state")
+      .eq("reference", verified.reference)
       .maybeSingle();
-    subscriptionId = subBySource?.id ?? null;
-  }
+    if (currentAttemptError) {
+      console.error("wompi_webhook_attempt_lookup_failed", { transactionId: verified.id, code: currentAttemptError.code ?? "QUERY_FAILED" });
+      return NextResponse.json({ message: "No se pudo conciliar el intento" }, { status: 500 });
+    }
 
-  if (!subscriptionId && reference) {
-    const { data: subByRef } = await supabase
-      .from("subscriptions")
-      .select("id")
-      .eq("reference", reference)
-      .maybeSingle();
-    subscriptionId = subByRef?.id ?? null;
-  }
+    if (currentAttempt?.wompi_transaction_id && currentAttempt.wompi_transaction_id !== verified.id) {
+      const previous = await getWompiTransaction(currentAttempt.wompi_transaction_id);
+      assertCompleteVerifiedTransaction(previous, currentAttempt.wompi_transaction_id);
+      const previousStatus = previous.status.toLowerCase();
+      const incomingStatus = verified.status.toLowerCase();
+      if (
+        previous.reference !== verified.reference
+        || previous.amountInCents !== verified.amountInCents
+        || previous.currency !== verified.currency
+      ) {
+        console.error("wompi_webhook_retry_blocked", {
+          transactionId: verified.id,
+          currentTransactionId: previous.id,
+          currentStatus: previous.status,
+        });
+        return NextResponse.json({ message: "El intento anterior aun no permite aplicar el reintento" }, { status: 500 });
+      }
 
-  if (!subscriptionId) {
-    return NextResponse.json({ message: "Evento guardado sin suscripcion relacionada" }, { status: 200 });
-  }
-
-  const { data: existingPayment, error: paymentLookupError } = await supabase
-    .from("payments")
-    .select("id")
-    .eq("wompi_transaction_id", wompiTransactionId)
-    .maybeSingle();
-
-  if (paymentLookupError) {
-    return NextResponse.json(
-      { message: "Error consultando pagos", details: paymentLookupError?.message ?? "unknown" },
-      { status: 500 }
-    );
-  }
-
-  const paymentPayload = {
-    subscription_id: subscriptionId,
-    amount: amountCop,
-    currency: tx.currency ?? "COP",
-    status,
-    wompi_transaction_id: wompiTransactionId,
-  };
-
-  const paymentMutation = existingPayment?.id
-    ? supabase.from("payments").update(paymentPayload).eq("id", existingPayment.id)
-    : supabase.from("payments").insert(paymentPayload);
-
-  const { error: paymentError } = await paymentMutation;
-  if (paymentError) {
-    return NextResponse.json(
-      { message: "No se pudo guardar el pago", details: paymentError?.message ?? "unknown" },
-      { status: 500 }
-    );
-  }
-
-  const subscriptionStatus = subscriptionStatusFromTransaction(status);
-  if (subscriptionStatus) {
-    const updates: Record<string, unknown> = { status: subscriptionStatus };
-    if (paymentSourceId) updates.wompi_payment_source_id = paymentSourceId;
-
-    if (subscriptionStatus === "active") {
-      const { data: subscription, error: fetchSubError } = await supabase
-        .from("subscriptions")
-        .select("next_payment_date, preferred_payment_day, processed_transaction_ids")
-        .eq("id", subscriptionId)
-        .maybeSingle();
-
-      if (!fetchSubError) {
-        const processedIds = Array.isArray(subscription?.processed_transaction_ids)
-          ? subscription.processed_transaction_ids
-          : [];
-
-        const shouldScheduleNextPayment =
-          !subscription?.next_payment_date || !processedIds.includes(wompiTransactionId);
-
-        if (shouldScheduleNextPayment) {
-          const preferredPaymentDay = isPreferredPaymentDay(subscription?.preferred_payment_day)
-            ? subscription.preferred_payment_day
-            : null;
-          const candidateNextPaymentDate = getNextMonthlyPaymentDate(
-            effectiveTransactionDate,
-            preferredPaymentDay
-          );
-          const existingNextPaymentDate = subscription?.next_payment_date
-            ? new Date(subscription.next_payment_date as unknown as string)
-            : null;
-
-          updates.next_payment_date =
-            existingNextPaymentDate &&
-            !Number.isNaN(existingNextPaymentDate.getTime()) &&
-            existingNextPaymentDate > candidateNextPaymentDate
-              ? existingNextPaymentDate.toISOString()
-              : candidateNextPaymentDate.toISOString();
-          updates.processed_transaction_ids = processedIds.includes(wompiTransactionId)
-            ? processedIds
-            : [...processedIds, wompiTransactionId];
-        }
+      const previousEffectiveAt = getVerifiedWompiEffectiveDate(
+        { id: previous.id, status: previous.status, finalized_at: previous.finalizedAt ?? undefined },
+        undefined
+      );
+      const previousSanitized = {
+        event: "transaction.reconciled",
+        transaction: {
+          id: previous.id,
+          status: previous.status,
+          reference: previous.reference,
+          amount_in_cents: previous.amountInCents,
+          currency: previous.currency,
+          finalized_at: previous.finalizedAt ?? null,
+        },
+        source: "server_reconciliation",
+        received_at: new Date().toISOString(),
+      };
+      const previousApply = await applyVerifiedTransaction(
+        previous,
+        previousEffectiveAt,
+        reconciliationEventKey(previous),
+        "transaction.reconciled",
+        previousSanitized
+      );
+      if (!previousApply.ok) {
+        console.error("wompi_webhook_previous_apply_failed", {
+          transactionId: previous.id,
+          code: previousApply.error?.code ?? "RPC_FAILED",
+        });
+        return NextResponse.json({ message: "No se pudo conciliar el intento anterior" }, { status: 500 });
+      }
+      if (
+        !RETRYABLE_PAYMENT_FAILURES.has(previousStatus)
+        && !RETRYABLE_PAYMENT_FAILURES.has(incomingStatus)
+      ) {
+        console.error("wompi_webhook_retry_blocked", {
+          transactionId: verified.id,
+          currentTransactionId: previous.id,
+          currentStatus: previous.status,
+        });
+        return NextResponse.json({ message: "El intento anterior aun no permite aplicar el reintento" }, { status: 500 });
       }
     }
 
-    const { error } = await supabase.from("subscriptions").update(updates).eq("id", subscriptionId);
-    if (error) {
-      return NextResponse.json(
-        { message: "No se pudo actualizar la suscripcion", details: error?.message ?? "unknown" },
-        { status: 500 }
-      );
-    }
-  }
+    const effectiveAt = getVerifiedWompiEffectiveDate(
+      { id: verified.id, finalized_at: verified.finalizedAt },
+      String(eventTransaction.status ?? "").toLowerCase() === verified.status.toLowerCase() ? payload.timestamp : undefined
+    );
+    const sanitized = {
+      event: payload.event ?? null,
+      timestamp: payload.timestamp ?? null,
+      transaction: {
+        id: verified.id,
+        status: verified.status,
+        reference: verified.reference,
+        amount_in_cents: verified.amountInCents,
+        currency: verified.currency,
+        finalized_at: verified.finalizedAt ?? null,
+      },
+      received_at: new Date().toISOString(),
+    };
 
-  return NextResponse.json({ message: "Evento procesado", transactionId: wompiTransactionId, status }, { status: 200 });
+    const applied = await applyVerifiedTransaction(
+      verified,
+      effectiveAt,
+      eventKey(payload, verified.id, receivedChecksum),
+      payload.event ?? "unknown",
+      sanitized
+    );
+    if (!applied.ok) {
+      console.error("wompi_webhook_apply_failed", { transactionId: verified.id, code: applied.error?.code ?? "RPC_FAILED" });
+      return NextResponse.json({ message: "No se pudo aplicar el evento" }, { status: 500 });
+    }
+
+    return NextResponse.json({ message: "Evento procesado", transactionId: verified.id, result: applied.result });
+  } catch (error) {
+    console.error("wompi_webhook_verification_failed", {
+      transactionId: eventTransaction.id,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    });
+    return NextResponse.json({ message: "No se pudo verificar la transaccion" }, { status: 502 });
+  }
 }

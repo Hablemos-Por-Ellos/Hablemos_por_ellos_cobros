@@ -18,6 +18,7 @@ export type WompiTransaction = {
 };
 
 export type WompiEventPayload = {
+  environment?: string;
   event?: string;
   data?: Record<string, unknown>;
   signature?: {
@@ -26,6 +27,19 @@ export type WompiEventPayload = {
   };
   timestamp?: number | string;
 };
+
+export function getVerifiedWompiEffectiveDate(
+  transaction: WompiTransaction | undefined,
+  validatedEventTimestamp?: WompiEventPayload["timestamp"]
+): Date | null {
+  const finalized = validDate(transaction?.finalized_at ?? transaction?.finalizedAt);
+  if (finalized) return finalized;
+  if (validatedEventTimestamp === undefined || validatedEventTimestamp === null || validatedEventTimestamp === "") return null;
+  const value = Number(validatedEventTimestamp);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  const result = new Date(value < 100_000_000_000 ? value * 1000 : value);
+  return Number.isNaN(result.getTime()) ? null : result;
+}
 
 function validDate(value: unknown) {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
@@ -109,7 +123,6 @@ export function extractPaymentSourceId(tx: WompiTransaction) {
     tx.payment_source_id ??
     tx.paymentSourceId ??
     (tx.payment_method ?? tx.paymentMethod)?.extra?.payment_source_id ??
-    (tx.payment_method ?? tx.paymentMethod)?.extra?.token ??
     null;
 
   return value == null ? null : String(value);

@@ -1,0 +1,71 @@
+name: hpe-auth-lab-030
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: hpe-auth-lab-db-030
+    labels:
+      codex.project: hpe-auth-integration-030
+    environment:
+      POSTGRES_DB: hpe_auth_lab
+      POSTGRES_PASSWORD: hpe-local-auth-fixture-only
+    ports:
+      - "127.0.0.1:54327:5432"
+    volumes:
+      - hpe-auth-lab-data:/var/lib/postgresql/data
+      - ./roles.sql:/docker-entrypoint-initdb.d/10-roles.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d hpe_auth_lab"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  auth:
+    image: supabase/gotrue:v2.196.0
+    container_name: hpe-auth-lab-auth-030
+    labels:
+      codex.project: hpe-auth-integration-030
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: http://127.0.0.1:54321/auth/v1
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:hpe-local-auth-fixture-only@db:5432/hpe_auth_lab
+      GOTRUE_SITE_URL: http://localhost:3001
+      GOTRUE_URI_ALLOW_LIST: http://localhost:3001/admin/auth/callback,http://127.0.0.1:3001/admin/auth/callback
+      GOTRUE_DISABLE_SIGNUP: "true"
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_SECRET: ${HPE_LAB_JWT_SECRET:?local fixture secret required}
+      GOTRUE_JWT_ISSUER: http://127.0.0.1:54321/auth/v1
+      GOTRUE_MFA_TOTP_ENROLL_ENABLED: "true"
+      GOTRUE_MFA_TOTP_VERIFY_ENABLED: "true"
+      GOTRUE_MFA_MAX_ENROLLED_FACTORS: 3
+      GOTRUE_LOG_LEVEL: error
+    ports:
+      - "127.0.0.1:54328:9999"
+  rest:
+    image: postgrest/postgrest:v14.17
+    container_name: hpe-auth-lab-rest-030
+    labels:
+      codex.project: hpe-auth-integration-030
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:hpe-local-auth-fixture-only@db:5432/hpe_auth_lab
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${HPE_LAB_JWT_SECRET:?local fixture secret required}
+      PGRST_LOG_LEVEL: error
+    ports:
+      - "127.0.0.1:54329:3000"
+volumes:
+  hpe-auth-lab-data:
+    labels:
+      codex.project: hpe-auth-integration-030

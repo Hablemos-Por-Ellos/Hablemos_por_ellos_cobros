@@ -33,9 +33,12 @@ describe("payment date helpers", () => {
     });
   });
 
-  it("keeps the existing day when no preferred payment day is configured", () => {
+  it("keeps the Colombia calendar day at 7am when no preferred payment day is configured", () => {
     expect(addOneMonthKeepingDay(new Date("2026-01-31T10:30:00.000Z")).toISOString()).toBe(
-      "2026-02-28T10:30:00.000Z"
+      "2026-02-28T12:00:00.000Z"
+    );
+    expect(getNextMonthlyPaymentDate(new Date("2026-08-01T02:00:00.000Z"), null).toISOString()).toBe(
+      "2026-08-31T12:00:00.000Z"
     );
   });
 });

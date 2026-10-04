@@ -1,0 +1,112 @@
+-- v0.3.0 | 2026-10-03. Parent-only runner; fixture DB hpe_lab, NEVER a product DB.
+-- Prerequisites: base_schema.sql + preflight + migration; same-session REAL file SHA-256
+-- via set_config('app.migration_digest', <computed digest>, false). Total runner budget: 300s.
+-- Expected rejection sections intentionally disable ON_ERROR_STOP, then assert rollback.
+\set ON_ERROR_STOP on
+\ir snapshot_membership_smoke.sql
+do $$ begin
+  if current_database() <> 'hpe_lab' or not exists (select 1 from public.donors
+    where id = '10000000-0000-0000-0000-000000000090' and email = 'legacy@example.test')
+    or not public.payment_admin_schema_ready() then
+    raise exception 'DISPOSABLE_PARENT_FIXTURE_REQUIRED';
+  end if;
+end $$;
+
+insert into public.webhook_events(id,raw)
+values ('60000000-0000-0000-0000-000000000092',
+  '{"receipt_version":1,"event":"transaction.updated","environment":"sandbox","event_timestamp":1789844400,
+    "transaction":{"id":"tx-new-after-migration","status":"APPROVED"},"checksum":"fixture","body_sha256":"fixture","received_at":"2026-09-19T15:00:00Z"}');
+update public.webhook_events set processing_state = 'needs_review', last_error = 'FIXTURE_UNCHANGED'
+where id = '60000000-0000-0000-0000-000000000092';
+
+create temporary table fixture_snapshot as
+select 'donors'::text as table_name,id,to_jsonb(t) as content from public.donors t
+union all select 'subscriptions',id,to_jsonb(t) from public.subscriptions t
+union all select 'payments',id,to_jsonb(t) from public.payments t
+union all select 'webhook_events',id,to_jsonb(t) from public.webhook_events t
+union all select 'audit_logs',id,to_jsonb(t) from public.audit_logs t;
+create temporary table fixture_ledger_snapshot as select * from public.payment_admin_migrations;
+create temporary table fixture_digest as select current_setting('app.migration_digest') as digest;
+
+create function pg_temp.assert_fixture_unchanged() returns void language plpgsql as $$
+declare v_changed boolean; v_table text;
+begin
+  foreach v_table in array array['donors','subscriptions','payments','webhook_events','audit_logs'] loop
+    execute format('select exists (select 1 from pg_temp.fixture_snapshot f where f.table_name = $1
+      and not exists (select 1 from public.%I t where t.id = f.id and to_jsonb(t) = f.content))
+      or (select count(*) from public.%I) <> (select count(*) from pg_temp.fixture_snapshot where table_name = $1)',v_table,v_table)
+    into v_changed using v_table;
+    if v_changed then raise exception 'FIXTURE_DATA_CHANGED: %',v_table; end if;
+  end loop;
+  if exists ((select * from public.payment_admin_migrations except select * from pg_temp.fixture_ledger_snapshot)
+    union all (select * from pg_temp.fixture_ledger_snapshot except select * from public.payment_admin_migrations)) then
+    raise exception 'FIXTURE_LEDGER_CHANGED_ON_REAPPLY';
+  end if;
+end;
+$$;
+
+-- SAME digest: no second backfill and no reinterpretation of new receipt processing metadata.
+\ir ../migrations/202609190001_payment_and_admin_hardening.sql
+select pg_temp.assert_fixture_unchanged();
+
+-- DIFFERENT digest must reject before replacing even a fixture sentinel function.
+create or replace function public.payment_admin_schema_ready() returns boolean
+language sql stable security definer set search_path = public as $$ select false $$;
+select set_config('app.migration_digest',case when lower(digest) = repeat('f',64)
+  then repeat('e',64) else repeat('f',64) end,false) from pg_temp.fixture_digest;
+\set ON_ERROR_STOP off
+\ir ../migrations/202609190001_payment_and_admin_hardening.sql
+\set ON_ERROR_STOP on
+do $$ begin
+  if public.payment_admin_schema_ready() then raise exception 'DIFFERENT_DIGEST_WAS_NOT_REJECTED'; end if;
+end $$;
+select pg_temp.assert_fixture_unchanged();
+select set_config('app.migration_digest',digest,false) from pg_temp.fixture_digest;
+\ir ../migrations/202609190001_payment_and_admin_hardening.sql
+
+-- Force an ORIGINAL-column change after the snapshot. Before-COMMIT preservation assertions
+-- must abort ALL DDL/DML and leave the sentinel false; the test trigger itself is outside that TX.
+create or replace function public.payment_admin_schema_ready() returns boolean
+language sql stable security definer set search_path = public as $$ select false $$;
+create function public.fixture_violate_snapshot() returns event_trigger language plpgsql as $$
+begin
+  update public.donors set first_name = 'fixture-preservation-violation'
+  where id = '10000000-0000-0000-0000-000000000090';
+end;
+$$;
+create event trigger fixture_violate_snapshot on ddl_command_end when tag in ('ALTER TABLE')
+execute function public.fixture_violate_snapshot();
+\set ON_ERROR_STOP off
+\ir ../migrations/202609190001_payment_and_admin_hardening.sql
+\set ON_ERROR_STOP on
+do $$ begin
+  if public.payment_admin_schema_ready() then raise exception 'ORIGINAL_CONTENT_ASSERTION_DID_NOT_ROLL_BACK'; end if;
+end $$;
+select pg_temp.assert_fixture_unchanged();
+drop event trigger fixture_violate_snapshot;
+drop function public.fixture_violate_snapshot();
+\ir ../migrations/202609190001_payment_and_admin_hardening.sql
+
+-- amount_cop-only is NOT silently converted. Preflight failure rolls back the fixture rename.
+begin;
+alter table public.payments rename column amount to amount_cop;
+\set ON_ERROR_STOP off
+\ir ../preflight/payment_admin_preflight.sql
+\set ON_ERROR_STOP on
+do $$ begin
+  if not exists (select 1 from information_schema.columns where table_schema = 'public'
+    and table_name = 'payments' and column_name = 'amount') then
+    raise exception 'AMOUNT_SCHEMA_PREFLIGHT_DID_NOT_REJECT';
+  end if;
+end $$;
+select pg_temp.assert_fixture_unchanged();
+
+-- Identity collisions block; no person merge/deletion is an automatic remedy.
+begin;
+drop index public.donors_email_normalized_unique;
+insert into public.donors(email,first_name,last_name) values ('LEGACY@example.test','Duplicate','Fixture');
+\set ON_ERROR_STOP off
+\ir ../preflight/payment_admin_preflight.sql
+\set ON_ERROR_STOP on
+select pg_temp.assert_fixture_unchanged();
+\ir ../postflight/payment_admin_postflight.sql

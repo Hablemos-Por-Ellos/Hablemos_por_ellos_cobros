@@ -12,15 +12,20 @@ const donor = {
   city: "Bogota",
   wantsUpdates: false,
   isRecurring: true,
+  preferredPaymentDay: 16 as const,
   amount: 50000,
 };
 
-function jsonResponse(data: unknown) {
-  return new Response(JSON.stringify(data), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
+const checkout = {
+  token: "checkout-token-that-is-long-enough-for-tests",
+  reference: "HPE-TEST-REFERENCE",
+  signature: "sig_mock",
+  amountInCents: 5000000,
+  currency: "COP" as const,
+  expiresAt: "2026-09-19T20:00:00.000Z",
+  acceptancePermalink: "https://wompi.test/terms",
+  personalDataAuthPermalink: "https://wompi.test/data",
+};
 
 describe("PaymentStep Wompi tokenization UX", () => {
   let originalFetch: typeof globalThis.fetch;
@@ -31,21 +36,7 @@ describe("PaymentStep Wompi tokenization UX", () => {
     originalPublicKey = process.env.NEXT_PUBLIC_WOMPI_PUBLIC_KEY_SANDBOX;
     process.env.NEXT_PUBLIC_WOMPI_PUBLIC_KEY_SANDBOX = "pub_test_mock";
 
-    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes("/api/wompi/signature")) {
-        return jsonResponse({ signature: "sig_mock" });
-      }
-      if (url.includes("/api/wompi/acceptance")) {
-        return jsonResponse({
-          acceptanceToken: "acceptance_mock",
-          acceptPersonalAuth: "personal_auth_mock",
-          acceptancePermalink: "https://wompi.test/terms",
-          personalDataAuthPermalink: "https://wompi.test/data",
-        });
-      }
-      throw new Error(`Unhandled fetch ${url}`);
-    }) as typeof fetch;
+    globalThis.fetch = vi.fn() as typeof fetch;
   });
 
   afterEach(() => {
@@ -61,7 +52,9 @@ describe("PaymentStep Wompi tokenization UX", () => {
 
   it("does not show a hard timeout while the Wompi modal is open", async () => {
     const open = vi.fn();
-    (window as Partial<Window>).WidgetCheckout = vi.fn(() => ({ open })) as Window["WidgetCheckout"];
+    (window as Partial<Window>).WidgetCheckout = vi.fn(function WidgetCheckoutMock() {
+      return { open };
+    }) as Window["WidgetCheckout"];
 
     render(
       <PaymentStep
@@ -69,6 +62,7 @@ describe("PaymentStep Wompi tokenization UX", () => {
         amount={50000}
         isRecurring
         paymentMethod="card"
+        checkout={checkout}
         onMethodChange={vi.fn()}
         onBack={vi.fn()}
         onCheckoutStarted={vi.fn()}
@@ -92,6 +86,7 @@ describe("PaymentStep Wompi tokenization UX", () => {
     });
 
     expect(open).toHaveBeenCalledTimes(1);
+    expect(payButton).toBeEnabled();
 
     act(() => {
       vi.advanceTimersByTime(31000);
@@ -99,5 +94,97 @@ describe("PaymentStep Wompi tokenization UX", () => {
 
     expect(screen.queryByText(/El proceso tardó demasiado/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Esto está tardando más de lo esperado/i)).not.toBeInTheDocument();
+  });
+
+  it("records checkout start before opening a one-time payment", async () => {
+    const callOrder: string[] = [];
+    const open = vi.fn(() => { callOrder.push("open"); });
+    const onCheckoutStarted = vi.fn(async () => { callOrder.push("checkout"); });
+    (window as Partial<Window>).WidgetCheckout = vi.fn(function WidgetCheckoutMock() {
+      return { open };
+    }) as Window["WidgetCheckout"];
+
+    render(
+      <PaymentStep
+        donor={{ ...donor, isRecurring: false }}
+        amount={50000}
+        isRecurring={false}
+        paymentMethod="card"
+        checkout={checkout}
+        onMethodChange={vi.fn()}
+        onBack={vi.fn()}
+        onCheckoutStarted={onCheckoutStarted}
+        onAuthorized={vi.fn()}
+      />
+    );
+
+    const payButton = await screen.findByRole("button", { name: /Pagar/i });
+    await waitFor(() => expect(payButton).toBeEnabled());
+    fireEvent.click(payButton);
+
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
+    expect(onCheckoutStarted).toHaveBeenCalledTimes(1);
+    expect(callOrder).toEqual(["checkout", "open"]);
+  });
+
+  it("keeps the payment button disabled while the backend confirmation is running", async () => {
+    (window as Partial<Window>).WidgetCheckout = vi.fn(function WidgetCheckoutMock() {
+      return { open: vi.fn() };
+    }) as Window["WidgetCheckout"];
+
+    render(
+      <PaymentStep
+        donor={donor}
+        amount={50000}
+        isRecurring
+        paymentMethod="card"
+        checkout={checkout}
+        onMethodChange={vi.fn()}
+        onBack={vi.fn()}
+        onCheckoutStarted={vi.fn()}
+        onAuthorized={vi.fn()}
+        loading
+      />
+    );
+
+    const termsCheckbox = await screen.findByRole("checkbox", { name: /Acepto los/i });
+    fireEvent.click(termsCheckbox);
+
+    const payButton = await screen.findByRole("button", { name: /Procesando/i });
+    expect(payButton).toBeDisabled();
+  });
+
+  it("does not reopen Wompi while the same authorization is being reconciled", async () => {
+    const open = vi.fn();
+    const onRetryConfirmation = vi.fn();
+    (window as Partial<Window>).WidgetCheckout = vi.fn(function WidgetCheckoutMock() {
+      return { open };
+    }) as Window["WidgetCheckout"];
+
+    render(
+      <PaymentStep
+        donor={donor}
+        amount={50000}
+        isRecurring
+        paymentMethod="card"
+        checkout={checkout}
+        onMethodChange={vi.fn()}
+        onBack={vi.fn()}
+        onCheckoutStarted={vi.fn()}
+        onAuthorized={vi.fn()}
+        reconciliationPending
+        onRetryConfirmation={onRetryConfirmation}
+      />
+    );
+
+    expect(await screen.findByText(/mismo pago está pendiente de confirmación/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Registrar tarjeta y donar/i })).not.toBeInTheDocument();
+
+    const retryButton = screen.getByRole("button", { name: /Reintentar confirmación/i });
+    fireEvent.click(retryButton);
+
+    expect(onRetryConfirmation).toHaveBeenCalledTimes(1);
+    expect(open).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /Volver al paso anterior/i })).toBeDisabled();
   });
 });

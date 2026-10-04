@@ -4,33 +4,48 @@ on:
   schedule:
     - cron: "0 12 * * *" # 7:00 a.m. Colombia (UTC-5)
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Inventory is read-only; charge sends real payments when enabled."
+        type: choice
+        default: inventory
+        options: [inventory, reconcile, charge]
 
 concurrency:
   group: monthly-charges-production
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   run:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: Production
     timeout-minutes: 15
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install deps
         run: npm ci
 
       - name: Run monthly charges
-        run: npm run monthly-charges
+        run: npm run monthly-charges -- --mode=${{ github.event_name == 'schedule' && 'charge' || inputs.mode || 'inventory' }}
         env:
+          VERCEL_ENV: production
+          APP_OPERATION_MODE: ${{ vars.APP_OPERATION_MODE || 'cutover' }}
+          FINANCIAL_OPERATIONS_ENABLED: ${{ vars.FINANCIAL_OPERATIONS_ENABLED || 'false' }}
           WOMPI_ENV: prod
 
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

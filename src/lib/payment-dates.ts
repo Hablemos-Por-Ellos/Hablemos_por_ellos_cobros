@@ -34,12 +34,23 @@ export function getColombiaBillingMonthRange(date: Date): BillingMonthRange {
 }
 
 export function addOneMonthKeepingDay(base: Date) {
-  const targetDay = base.getUTCDate();
-  const candidate = new Date(base);
-  candidate.setUTCMonth(candidate.getUTCMonth() + 1, 1);
-  const daysInTargetMonth = new Date(Date.UTC(candidate.getUTCFullYear(), candidate.getUTCMonth() + 1, 0)).getUTCDate();
-  candidate.setUTCDate(Math.min(targetDay, daysInTargetMonth));
-  return candidate;
+  const colombiaDate = getColombiaCalendarDate(base);
+  const targetYear = colombiaDate.getUTCFullYear();
+  const targetMonth = colombiaDate.getUTCMonth() + 1;
+  const targetDay = colombiaDate.getUTCDate();
+  const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+
+  return new Date(
+    Date.UTC(
+      targetYear,
+      targetMonth,
+      Math.min(targetDay, daysInTargetMonth),
+      COLOMBIA_CHARGE_HOUR_UTC,
+      0,
+      0,
+      0
+    )
+  );
 }
 
 export function getNextMonthlyPaymentDate(base: Date, preferredPaymentDay?: number | null) {

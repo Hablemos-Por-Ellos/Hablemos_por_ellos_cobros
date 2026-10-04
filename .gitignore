@@ -1,5 +1,6 @@
 /node_modules
 .next
+.next-integration/
 out
 .DS_Store
 *.log
@@ -20,3 +21,10 @@ PASOS_A_SEGUIR_LEGACY.md
 CONFIGURAR_KEEPALIVE.md
 tsconfig.tsbuildinfo
 .playwright-mcp/
+.playwright-cli/
+.superpowers/
+*.dump
+*.backup
+*.hpebk
+/backups/
+/private-ops/

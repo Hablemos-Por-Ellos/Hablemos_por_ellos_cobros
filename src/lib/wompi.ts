@@ -6,13 +6,21 @@ export const WOMPI_WIDGET_URL = "https://checkout.wompi.co/widget.js";
 const WOMPI_API_BASE_URL_PROD = "https://production.wompi.co/v1";
 const WOMPI_API_BASE_URL_SANDBOX = "https://sandbox.wompi.co/v1";
 
-// ============================================================
-// 🔧 ENTORNO: usa prod si NEXT_PUBLIC_WOMPI_ENV === "prod"; de lo contrario sandbox
-// Si prefieres fijarlo manualmente, cambia el ternario a "prod" | "sandbox" directamente.
-// ============================================================
-export const WOMPI_ENV: "sandbox" | "prod" =
-  process.env.NEXT_PUBLIC_WOMPI_ENV === "prod" ? "prod" : "sandbox";
-// ============================================================
+export function resolveWompiEnvironment(
+  configuredValue: string | undefined,
+  nodeEnvironment: string | undefined
+): "sandbox" | "prod" {
+  const configured = configuredValue?.trim().toLowerCase();
+  if (configured === "prod" || configured === "production") return "prod";
+  if (configured === "sandbox" || configured === "test") return "sandbox";
+  if (nodeEnvironment === "production") throw new Error("NEXT_PUBLIC_WOMPI_ENV_NOT_CONFIGURED");
+  return "sandbox";
+}
+
+export const WOMPI_ENV = resolveWompiEnvironment(
+  process.env.NEXT_PUBLIC_WOMPI_ENV,
+  process.env.NODE_ENV
+);
 
 // Usa prod si WOMPI_ENV === "prod"; sandbox en cualquier otro caso
 export const isProduction = WOMPI_ENV === "prod";
@@ -20,12 +28,6 @@ export const isProduction = WOMPI_ENV === "prod";
 export const WOMPI_API_BASE_URL = isProduction
   ? WOMPI_API_BASE_URL_PROD
   : WOMPI_API_BASE_URL_SANDBOX;
-
-export type WompiSimulatedResponse = {
-  paymentSourceId: string;
-  token: string;
-  maskedDetails: string;
-};
 
 /**
  * Determina la URL base de la API de Wompi según la llave configurada.
@@ -110,19 +112,6 @@ export function getWompiEventsSecret(): string {
     process.env.WOMPI_EVENTS_SECRET ??
     ""
   );
-}
-
-export function simulateWompiAuthorization(method: "card" | "nequi"): WompiSimulatedResponse {
-  const token =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
-  const maskedDetails = method === "card" ? "Tarjeta •••• 4242" : "Nequi •••• 1234";
-  return {
-    paymentSourceId: `wompi-src-${token}`,
-    token,
-    maskedDetails,
-  };
 }
 
 // Limpia cualquier overlay del widget de Wompi que quede pegado en el DOM

@@ -1,40 +1,45 @@
 import { NextResponse } from "next/server";
-import crypto from "crypto";
-import { getWompiIntegritySecret, WOMPI_ENV } from "@/lib/wompi";
+import { z } from "zod";
+import { hashCheckoutToken } from "@/lib/checkout-security";
+import { getServiceSupabaseClient } from "@/lib/supabase-server";
+import { createWompiIntegritySignature } from "@/lib/wompi-server";
+import { WOMPI_ENV } from "@/lib/wompi";
+import { financialOperationsEnabled } from "@/lib/operation-mode";
+import { paymentSchemaReady } from "@/lib/payment-schema";
+
+const requestSchema = z.object({
+  checkoutToken: z.string().min(32).max(256),
+  reference: z.string().min(8).max(100),
+});
 
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => null);
-  const amountInCents = body?.amountInCents;
-  const currency = body?.currency;
-  const reference = body?.reference;
+  if (!financialOperationsEnabled()) return NextResponse.json({ message: "Pagos temporalmente en mantenimiento." }, { status: 503 });
+  const parsed = requestSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ message: "Solicitud invalida." }, { status: 400 });
 
-  if (!amountInCents || !currency || !reference) {
-    return NextResponse.json({ message: "Faltan parámetros" }, { status: 400 });
+  const supabase = getServiceSupabaseClient();
+  if (!supabase) return NextResponse.json({ message: "Servicio de datos no configurado." }, { status: 503 });
+  if (!(await paymentSchemaReady(supabase))) return NextResponse.json({ message: "Servicio de pagos en preparacion." }, { status: 503 });
+
+  try {
+    const { data, error } = await supabase
+      .from("checkout_intents")
+      .select("reference, amount, currency, environment, expires_at")
+      .eq("reference", parsed.data.reference)
+      .eq("secret_hash", hashCheckoutToken(parsed.data.checkoutToken))
+      .maybeSingle();
+
+    if (error || !data || data.environment !== WOMPI_ENV || new Date(data.expires_at).getTime() <= Date.now()) {
+      return NextResponse.json({ message: "La sesion de pago no es valida." }, { status: 403 });
+    }
+
+    return NextResponse.json({
+      reference: data.reference,
+      amountInCents: data.amount * 100,
+      currency: data.currency,
+      signature: createWompiIntegritySignature(data.reference, data.amount * 100, data.currency),
+    });
+  } catch {
+    return NextResponse.json({ message: "No fue posible preparar la firma." }, { status: 500 });
   }
-
-  const integritySecret = getWompiIntegritySecret();
-  if (!integritySecret) {
-    const suffix = WOMPI_ENV === "prod" ? "PROD" : "SANDBOX";
-    return NextResponse.json(
-      { message: `Configura WOMPI_INTEGRITY_SECRET_${suffix} en el servidor` },
-      { status: 500 }
-    );
-  }
-
-  // Validate that the secret matches the selected environment (avoids mismatched hashes/403)
-  const expectedPrefix = WOMPI_ENV === "prod" ? "prod_integrity_" : "test_integrity_";
-  if (!integritySecret.startsWith(expectedPrefix)) {
-    const label = WOMPI_ENV === "prod" ? "producción" : "sandbox";
-    return NextResponse.json(
-      { message: `El secreto de integridad de ${label} debe iniciar con ${expectedPrefix}` },
-      { status: 500 }
-    );
-  }
-
-  // Orden correcto según docs Wompi: referencia + monto + moneda + secreto
-  const stringToSign = `${reference}${amountInCents}${currency}${integritySecret}`;
-
-  const signature = crypto.createHash("sha256").update(stringToSign).digest("hex");
-
-  return NextResponse.json({ signature });
 }

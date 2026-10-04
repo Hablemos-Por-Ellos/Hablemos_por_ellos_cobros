@@ -29,7 +29,8 @@ interface PaymentStepProps {
   paymentMethod: "card" | "nequi";
   onMethodChange: (method: "card" | "nequi") => void;
   onBack: () => void;
-  onCheckoutStarted: (data: { reference: string }) => Promise<void> | void;
+  checkout: CheckoutSession;
+  onCheckoutStarted: () => Promise<void> | void;
   onAuthorized: (wompiData: {
     token: string;
     cardToken?: string;
@@ -38,9 +39,9 @@ interface PaymentStepProps {
     transactionId?: string;
     maskedDetails: string;
     reference: string;
-    acceptanceToken?: string;
-    acceptPersonalAuth?: string;
   }) => Promise<void> | void;
+  reconciliationPending?: boolean;
+  onRetryConfirmation?: () => Promise<void> | void;
   loading?: boolean;
 }
 
@@ -95,9 +96,13 @@ interface WidgetCheckoutResult {
   };
 }
 
-type AcceptanceData = {
-  acceptanceToken: string;
-  acceptPersonalAuth: string;
+export type CheckoutSession = {
+  token: string;
+  reference: string;
+  signature: string;
+  amountInCents: number;
+  currency: "COP";
+  expiresAt: string;
   acceptancePermalink: string | null;
   personalDataAuthPermalink: string | null;
 };
@@ -108,13 +113,6 @@ export function recurringMissingPaymentSourceMessage(paymentMethodType: unknown)
     : "Wompi aprobo el pago, pero no devolvio una fuente tokenizada para cobro mensual.";
 }
 
-// Generate unique reference for each transaction
-function generateReference(): string {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 8);
-  return `HPE-${timestamp}-${random}`.toUpperCase();
-}
-
 export function PaymentStep({
   donor,
   amount,
@@ -122,8 +120,11 @@ export function PaymentStep({
   paymentMethod,
   onMethodChange,
   onBack,
+  checkout,
   onCheckoutStarted,
   onAuthorized,
+  reconciliationPending = false,
+  onRetryConfirmation,
   loading,
 }: PaymentStepProps) {
   const [isWidgetLoaded, setIsWidgetLoaded] = useState(false);
@@ -131,13 +132,9 @@ export function PaymentStep({
   const [isProcessing, setIsProcessing] = useState(false);
   const [isTakingLong, setIsTakingLong] = useState(false);
   
-  // New state for pre-fetching signature
-  const [integritySignature, setIntegritySignature] = useState<string | null>(null);
-  const [currentReference, setCurrentReference] = useState<string | null>(null);
-  const [isSignatureLoading, setIsSignatureLoading] = useState(false);
-  const [acceptance, setAcceptance] = useState<AcceptanceData | null>(null);
-  const [isAcceptanceLoading, setIsAcceptanceLoading] = useState(false);
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
+  const integritySignature = checkout.signature;
+  const currentReference = checkout.reference;
 
   useEffect(() => {
     if (isRecurring && paymentMethod === "nequi") {
@@ -147,11 +144,12 @@ export function PaymentStep({
 
   const canOpenCheckout =
     isWidgetLoaded &&
-    !!integritySignature &&
-    !!currentReference &&
+    !!checkout.signature &&
+    !!checkout.reference &&
     !isProcessing &&
-    !isSignatureLoading &&
-    (!isRecurring || (!!acceptance && hasAcceptedTerms && !isAcceptanceLoading));
+    !loading &&
+    !reconciliationPending &&
+    (!isRecurring || hasAcceptedTerms);
 
   // Load Wompi script
   useEffect(() => {
@@ -186,83 +184,9 @@ export function PaymentStep({
     return () => cleanupWompiOverlayDom();
   }, []);
 
-  // Fetch signature on mount/amount change with AbortController timeout
-  const fetchSignature = useCallback(async () => {
-    setIsSignatureLoading(true);
-    setWompiError(null);
-    
-    // AbortController with 10s timeout to prevent hanging requests
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-    
-    try {
-      const reference = generateReference();
-      const amountInCents = Math.max(150000, Math.round(amount * 100));
-      
-      const response = await fetch("/api/wompi/signature", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amountInCents, currency: "COP", reference }),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        console.error("Signature error:", error);
-        if (response.status === 500) {
-             setWompiError("Error de configuración del servidor (Firma).");
-        }
-        return;
-      }
-
-      const { signature } = await response.json();
-      setIntegritySignature(signature);
-      setCurrentReference(reference);
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error instanceof Error && error.name === "AbortError") {
-        setWompiError("La conexión tardó demasiado. Por favor, intenta de nuevo.");
-      } else {
-        console.error("Signature fetch error:", error);
-      }
-    } finally {
-      setIsSignatureLoading(false);
-    }
-  }, [amount]);
-
-  // Prefetch signature/reference so the user doesn't need to click twice.
-  useEffect(() => {
-    fetchSignature();
-  }, [fetchSignature]);
-
-  const fetchAcceptance = useCallback(async () => {
-    if (!isRecurring) return;
-
-    setIsAcceptanceLoading(true);
-    try {
-      const response = await fetch("/api/wompi/acceptance");
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error?.message ?? "No pudimos cargar los terminos de Wompi.");
-      }
-      setAcceptance(await response.json());
-    } catch (error) {
-      setWompiError(error instanceof Error ? error.message : "No pudimos cargar los terminos de Wompi.");
-    } finally {
-      setIsAcceptanceLoading(false);
-    }
-  }, [isRecurring]);
-
   useEffect(() => {
     setHasAcceptedTerms(false);
-    if (isRecurring) {
-      fetchAcceptance();
-    } else {
-      setAcceptance(null);
-    }
-  }, [fetchAcceptance, isRecurring]);
+  }, [checkout.reference, isRecurring]);
 
   // Open Wompi checkout widget
   const openWompiCheckout = useCallback(async () => {
@@ -270,6 +194,8 @@ export function PaymentStep({
       setWompiError("El widget de Wompi aún no está listo.");
       return;
     }
+
+    if (loading || reconciliationPending) return;
 
     if (!integritySignature || !currentReference) {
       // Evita el doble click: si aún no está lista la firma/referencia, no intentes abrir.
@@ -282,7 +208,7 @@ export function PaymentStep({
       return;
     }
 
-    if (isRecurring && (!acceptance || !hasAcceptedTerms)) {
+    if (isRecurring && !hasAcceptedTerms) {
       setWompiError("Debes aceptar los terminos de Wompi para guardar la tarjeta.");
       return;
     }
@@ -315,6 +241,7 @@ export function PaymentStep({
 
     const markWompiOpened = () => {
       clearWaitingState();
+      setIsProcessing(false);
     };
 
     const finishProcessing = () => {
@@ -324,28 +251,26 @@ export function PaymentStep({
     };
 
     try {
-      if (isRecurring) {
-        await onCheckoutStarted({ reference: currentReference });
+      await onCheckoutStarted();
 
+      if (isRecurring) {
         cleanupWompiOverlayDom();
-        const checkout = new window.WidgetCheckout({
+        const widget = new window.WidgetCheckout({
           widgetOperation: "tokenize",
           currency: "COP",
           publicKey,
         });
 
         markWompiOpened();
-        checkout.open((result: WidgetCheckoutResult) => {
+        widget.open((result: WidgetCheckoutResult) => {
           finishProcessing();
-          fetchSignature();
-
           const paymentSource = result.payment_source;
           const cardToken = paymentSource?.token ?? null;
           const paymentSourceType = paymentSource?.type ?? "CARD";
 
           if (!cardToken) {
             setWompiError("Wompi no devolvio el token de la tarjeta. Intenta de nuevo.");
-            console.warn("Wompi tokenizacion sin token", { paymentSource });
+            console.warn("Wompi tokenizacion sin token");
             return;
           }
 
@@ -355,17 +280,15 @@ export function PaymentStep({
             paymentSourceType,
             reference: currentReference,
             maskedDetails: "Tarjeta tokenizada",
-            acceptanceToken: acceptance?.acceptanceToken,
-            acceptPersonalAuth: acceptance?.acceptPersonalAuth,
           });
         });
         return;
       }
 
       cleanupWompiOverlayDom();
-      const checkout = new window.WidgetCheckout({
+      const widget = new window.WidgetCheckout({
         currency: "COP",
-        amountInCents: Math.max(150000, Math.round(amount * 100)),
+        amountInCents: checkout.amountInCents,
         reference: currentReference,
         publicKey,
         redirectUrl,
@@ -383,13 +306,10 @@ export function PaymentStep({
       });
 
       markWompiOpened();
-      checkout.open((result: WidgetCheckoutResult) => {
-        // console.log("Wompi widget result:", result);
+      widget.open((result: WidgetCheckoutResult) => {
         finishProcessing();
         
         // Regenerate signature for next attempt
-        fetchSignature();
-
         if (!result.transaction) {
           setWompiError("No recibimos confirmación de Wompi. Intenta de nuevo.");
           return;
@@ -413,14 +333,14 @@ export function PaymentStep({
 
         if (!paymentSourceId && isRecurring) {
           setWompiError(recurringMissingPaymentSourceMessage(actualPaymentMethod));
-          console.warn("Wompi sin payment_source_id", { transaction: tx, paymentInfo, actualPaymentMethod });
+          console.warn("Wompi sin payment_source_id", { actualPaymentMethod });
           return;
         }
 
         const wompiToken = transactionId ?? paymentSourceId;
         if (!wompiToken) {
           setWompiError("No recibimos confirmación de Wompi. Intenta de nuevo.");
-          console.warn("Wompi sin transaction id", { transaction: tx, paymentInfo });
+          console.warn("Wompi sin transaction id");
           return;
         }
         
@@ -460,7 +380,6 @@ export function PaymentStep({
     }
   }, [
     isWidgetLoaded,
-    amount,
     donor,
     isRecurring,
     paymentMethod,
@@ -468,9 +387,10 @@ export function PaymentStep({
     onAuthorized,
     integritySignature,
     currentReference,
-    acceptance,
     hasAcceptedTerms,
-    fetchSignature,
+    checkout,
+    loading,
+    reconciliationPending,
   ]);
 
   return (
@@ -500,14 +420,14 @@ export function PaymentStep({
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           {methodOptions.map((option) => {
-            const isDisabled = isRecurring && option.id === "nequi";
+            const isDisabled = reconciliationPending || (isRecurring && option.id === "nequi");
             return (
               <button
                 key={option.id}
                 type="button"
                 onClick={() => onMethodChange(option.id)}
                 disabled={isDisabled}
-                title={isDisabled ? "Nequi no está disponible para cobro mensual automático." : undefined}
+                title={isRecurring && option.id === "nequi" ? "Nequi no está disponible para cobro mensual automático." : undefined}
                 className={`flex flex-col gap-2 rounded-3xl border p-4 text-left transition ${
                   paymentMethod === option.id
                     ? "border-foundation-blue bg-foundation-blue/10"
@@ -527,15 +447,15 @@ export function PaymentStep({
             <input
               type="checkbox"
               checked={hasAcceptedTerms}
-              disabled={isAcceptanceLoading || !acceptance}
+              disabled={reconciliationPending || !checkout.acceptancePermalink || !checkout.personalDataAuthPermalink}
               onChange={(event) => setHasAcceptedTerms(event.target.checked)}
               className="mt-1 h-4 w-4 rounded border-slate-300 text-foundation-blue"
             />
             <span>
               Acepto los{" "}
-              {acceptance?.acceptancePermalink ? (
+              {checkout.acceptancePermalink ? (
                 <a
-                  href={acceptance.acceptancePermalink}
+                  href={checkout.acceptancePermalink}
                   target="_blank"
                   rel="noreferrer"
                   className="font-semibold text-foundation-blue underline"
@@ -546,9 +466,9 @@ export function PaymentStep({
                 "terminos de Wompi"
               )}{" "}
               y la{" "}
-              {acceptance?.personalDataAuthPermalink ? (
+              {checkout.personalDataAuthPermalink ? (
                 <a
-                  href={acceptance.personalDataAuthPermalink}
+                  href={checkout.personalDataAuthPermalink}
                   target="_blank"
                   rel="noreferrer"
                   className="font-semibold text-foundation-blue underline"
@@ -566,7 +486,23 @@ export function PaymentStep({
         {/* Wompi Payment Button */}
         <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6">
           <div className="flex flex-col items-center gap-4 text-center">
-            {wompiError ? (
+            {reconciliationPending ? (
+              <div className="flex w-full flex-col items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <p className="font-semibold text-amber-950">Este mismo pago está pendiente de confirmación.</p>
+                <p className="max-w-md text-sm text-amber-900">
+                  No abras otra ventana de pago. Volveremos a consultar el intento ya enviado a Wompi.
+                </p>
+                <Button
+                  type="button"
+                  onClick={onRetryConfirmation}
+                  loading={loading}
+                  disabled={loading || !onRetryConfirmation}
+                  className="w-full sm:max-w-xs"
+                >
+                  Reintentar confirmación
+                </Button>
+              </div>
+            ) : wompiError ? (
               <div className="flex flex-col items-center gap-3 rounded-2xl bg-red-50 p-4 w-full">
                 <span className="text-3xl">⚠️</span>
                 <p className="font-medium text-red-900">{wompiError}</p>
@@ -574,10 +510,6 @@ export function PaymentStep({
                   type="button"
                   onClick={() => {
                     setWompiError(null);
-                    fetchSignature();
-                    if (isRecurring) {
-                      fetchAcceptance();
-                    }
                   }}
                   className="text-sm font-semibold text-red-700 underline hover:text-red-900"
                 >
@@ -610,13 +542,13 @@ export function PaymentStep({
                 <Button
                   type="button"
                   onClick={openWompiCheckout}
-                  loading={isProcessing || !isWidgetLoaded || isSignatureLoading || isAcceptanceLoading}
+                  loading={isProcessing || loading || !isWidgetLoaded}
                   disabled={!canOpenCheckout}
                   className="w-full sm:max-w-xs text-lg py-6"
                 >
-                  {!isWidgetLoaded || isSignatureLoading || isAcceptanceLoading
+                  {!isWidgetLoaded
                     ? "Preparando..."
-                    : isProcessing
+                    : isProcessing || loading
                       ? "Procesando..."
                       : isRecurring
                         ? `Registrar tarjeta y donar ${formatCurrencyCOP(amount)}`
@@ -640,7 +572,7 @@ export function PaymentStep({
         <SecurityNote />
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" variant="ghost" onClick={onBack} disabled={isProcessing} className="w-full sm:w-auto">
+          <Button type="button" variant="ghost" onClick={onBack} disabled={isProcessing || loading || reconciliationPending} className="w-full sm:w-auto">
             Volver al paso anterior
           </Button>
         </div>

@@ -2,8 +2,12 @@ import { defineConfig } from "vitest/config";
 import { fileURLToPath } from "node:url";
 
 export default defineConfig({
-  esbuild: {
-    jsx: "automatic",
+  // Tests use explicit fixtures, never credentials loaded from dotenv files.
+  envDir: false,
+  oxc: {
+    jsx: {
+      runtime: "automatic",
+    },
   },
   resolve: {
     alias: {
