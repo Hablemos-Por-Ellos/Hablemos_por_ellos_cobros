@@ -2,6 +2,14 @@
 
 ## 0.3.0 - 2026-10-03 - Pending Publication
 
+- 2026-10-04: identify fictitious admin data in the responsive header with
+  explicit user approval. Keep the real admin subtitle and public donation
+  routes unchanged; verify Production cannot enable the administrative demo.
+  Repeat 901 tests, lint and isolated demo build; no production data writes.
+- 2026-10-04: publish the candidate branch and observe a READY demo Preview.
+  Verify masked fictional data, filters and three browser-only mutations with
+  no administrative API or provider requests. Record incomplete remote API
+  validation and the mobile demo-label issue; no production migration or charge.
 - 2026-10-04: record the user's Production/Preview configuration and verified
   production-only scope of four private credentials. Document the existing
   administrative demo switch and remaining isolation/backup gates; no runtime

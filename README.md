@@ -4,10 +4,11 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
 
 ## Estado actual
 
-- Este arbol prepara `0.3.0` localmente; no es una release ni un despliegue.
-- La rama productiva `main` remota conserva `0.2.1`; la revision del despliegue
-  activo sigue por verificar. Las funciones nuevas de este documento requieren
-  completar la migracion y el corte antes de su habilitacion productiva.
+- Este arbol prepara `0.3.0`: rama publicada y Preview ficticia, sin release
+  ni habilitacion productiva del paquete.
+- La rama productiva `main` conserva `0.2.1`. Vercel confirma el despliegue
+  asociado al dominio productivo con fuente `9258bb0`, sin cambios en este paso.
+  Las funciones reales nuevas requieren completar la migracion y el corte.
 - Revision operativa de solo lectura del 2026-10-04 UTC: `main` remoto sigue
   en `0.2.1`, Supabase mostro `Healthy` y los nueve runs mas recientes
   consultados terminaron correctamente. No son garantias futuras ni autorizan
@@ -29,9 +30,20 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
   figuran como disabled_manually en GitHub; no se ejecutaron cobros.
   El usuario configuro Production en cutover y los modos de Preview en demo;
   se verificaron cuatro credenciales privadas y CRON_SECRET solo en Production,
-  y ADMIN_DEMO_MODE=true solo en Preview. Aun faltan la verificacion remota de
-  Preview, exclusion de escritores y respaldo final/migracion.
+  y ADMIN_DEMO_MODE=true solo en Preview. Aun faltan cerrar las comprobaciones
+  remotas de API, excluir escritores y completar respaldo final/migracion.
   Ver `docs/CUTOVER_2026-10-04.md`.
+- Preview de `codex/admin-wompi-hardening`, fuente `5b67827`: READY en Vercel.
+  Admin, filtros y tres cambios ficticios comprobados; cero solicitudes a
+  proveedores o APIs administrativas durante esos cambios. Contactos
+  enmascarados; no se escribio en Supabase ni se enviaron cargos.
+  La prueba automatizada directa de API remota no se completo: GET sin sesion
+  recibio 302 y el navegador bloqueo esa navegacion. No se uso un bypass.
+  El subtitulo demo movil se corrigio con autorizacion, solo en el admin
+  ficticio; no cambia /donar ni el admin real. Validacion local posterior:
+  901 pruebas en 37 archivos, lint y build demo correctos. La nueva Preview
+  de ese subtitulo todavia requiere comprobacion visual.
+  Ver el informe de corte para el alcance y los pendientes.
 - Restriccion posterior: no crear recursos adicionales; usar las cuentas desde
   la sesion correcta del navegador, sin conectores de cuentas. No se creo el
   entorno externo propuesto. Solo se pauso Repository Activity durante el corte;

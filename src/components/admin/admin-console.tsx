@@ -328,7 +328,7 @@ function AdminShell({ children, activeView, onReset, demo, adminEmail, readOnly 
               </button>
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-slate-900 lg:hidden">Hablemos por Ellos</p>
-                <p className="text-xs font-medium text-slate-500">Panel de revisión operativa</p>
+                <p className="text-xs font-medium text-slate-500">{demo ? "Datos ficticios · Vista local" : "Panel de revisión operativa"}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
