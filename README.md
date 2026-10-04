@@ -5,8 +5,9 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
 ## Estado actual
 
 - Este arbol prepara `0.3.0` localmente; no es una release ni un despliegue.
-- Produccion sigue en `main` con el paquete anterior. Las funciones nuevas de
-  este documento no estan disponibles hasta completar la migracion y el corte.
+- La rama productiva `main` remota conserva `0.2.1`; la revision del despliegue
+  activo sigue por verificar. Las funciones nuevas de este documento requieren
+  completar la migracion y el corte antes de su habilitacion productiva.
 - Revision operativa de solo lectura del 2026-10-04 UTC: `main` remoto sigue
   en `0.2.1`, Supabase mostro `Healthy` y los nueve runs mas recientes
   consultados terminaron correctamente. No son garantias futuras ni autorizan
@@ -26,8 +27,11 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
 - Preparacion del corte del 2026-10-04: autorizados commit, push y despliegue en
   mantenimiento, sin reapertura financiera. Los tres workflows operativos
   figuran como disabled_manually en GitHub; no se ejecutaron cobros.
-  La configuracion Vercel, exclusion de escritores, respaldo final y migracion
-  todavia no estan completados. Ver `docs/CUTOVER_2026-10-04.md`.
+  El usuario configuro Production en cutover y los modos de Preview en demo;
+  se verificaron cuatro credenciales privadas y CRON_SECRET solo en Production,
+  y ADMIN_DEMO_MODE=true solo en Preview. Aun faltan la verificacion remota de
+  Preview, exclusion de escritores y respaldo final/migracion.
+  Ver `docs/CUTOVER_2026-10-04.md`.
 - Restriccion posterior: no crear recursos adicionales; usar las cuentas desde
   la sesion correcta del navegador, sin conectores de cuentas. No se creo el
   entorno externo propuesto. Solo se pauso Repository Activity durante el corte;
@@ -159,7 +163,18 @@ CHECKOUT_TOKEN_PEPPER
 APP_OPERATION_MODE
 NEXT_PUBLIC_APP_OPERATION_MODE
 FINANCIAL_OPERATIONS_ENABLED
+ADMIN_DEMO_MODE
 ```
+
+`ADMIN_DEMO_MODE=true` se usa solamente para el panel ficticio de Preview o del
+laboratorio local, junto con `APP_OPERATION_MODE=demo`. No habilitarlo en
+Production. Los modos demo no administran donantes reales ni autorizan cargos.
+
+Limitar las credenciales productivas a Production evita entregarlas a futuros
+despliegues de prueba; una credencial distinta del mismo proyecto no separa sus
+datos. El alcance All Environments no implica por si mismo exposicion al
+navegador. Los cambios guardados de entorno solo se aplican a nuevos despliegues;
+no certifican la configuracion de un despliegue anterior.
 
 Variables principales para GitHub Actions, environment `Production`:
 
@@ -351,4 +366,4 @@ Antes de hacer push a un repo publico:
 - No subas `.env.local`, backups `.backup`, dumps `.sql`, capturas con llaves ni archivos de Supabase descargados.
 - Revisa que los workflows usen `environment: Production` si dependen de environment secrets.
 
-<!-- repository-activity: 2026-08-23T02:36:29Z -->
+<!-- repository-activity: 2026-10-01T18:54:35Z -->

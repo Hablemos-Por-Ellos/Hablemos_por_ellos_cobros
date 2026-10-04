@@ -2,6 +2,10 @@
 
 ## 0.3.0 - 2026-10-03 - Pending Publication
 
+- 2026-10-04: record the user's Production/Preview configuration and verified
+  production-only scope of four private credentials. Document the existing
+  administrative demo switch and remaining isolation/backup gates; no runtime
+  change, deployment, production migration or financial enablement.
 - 2026-10-04: begin the authorized release preparation while keeping finances
   disabled. Verify all three operational workflows paused, record outstanding
   Vercel configuration/backup gates, and restrict Keepalive to the main branch.
