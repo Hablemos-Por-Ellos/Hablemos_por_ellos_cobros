@@ -46,10 +46,49 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
   `dev` incorpora ese candidato por fast-forward y su Preview tambien esta
   READY con admin ficticio. `main` permanece sin cambios.
   Ver el informe de corte para el alcance y los pendientes.
+- Continuacion de preparacion: lectura productiva confirmada sin escrituras,
+  workflows pausados y nueva copia cifrada creada. El acceso denegado local se
+  corrigio con autorizacion: los tres archivos conservan acceso solo de la cuenta
+  creadora y SYSTEM. Restauracion de preparacion verificada: 43 tablas/409 filas,
+  cero diferencias de contenido/esquema/permisos, cobertura 5; segunda copia
+  privada con los tres SHA-256 coincidentes. No es respaldo final del corte y no
+  se ejecuto migracion productiva. El usuario observo mantenimiento en el GET
+  acceptance en Preview; no acredita todos los handlers remotos ni sus estados.
+  El artefacto SQL exacto tambien paso aplicacion/reaplicacion en esa copia
+  Docker offline, con preservacion antes/despues del commit local y totales
+  financieros intactos. Quedan pendientes excluir escritores, respaldo final
+  fresco y el mensaje obligatorio antes de SQL productiva.
+  Wompi confirmo los 39 pagos registrados mediante GET: 37 aprobados y dos
+  rechazados, con identidad, importe, moneda y referencia coincidentes.
+  En la copia Docker se ensayo el enriquecimiento de las 37 fechas aprobadas
+  y su repeticion idempotente, sin alterar campos originales ni agendas.
+  No se conciliaron ni migraron registros productivos. Otros cinco eventos
+  antiguos siguen sin pago/suscripcion vinculables en Supabase actual: Wompi
+  confirma dos aprobados y tres rechazados. Requieren clasificacion privada;
+  no asignarlos por suposicion ni habilitar cobros por el ensayo.
+  La revision de main encontro caminos compatibles en el flujo de aporte unico
+  dependiente del callback, no una causa historica demostrada. La reserva previa
+  del checkout del candidato no reconstruye automaticamente esos vinculos.
+- Autorizacion posterior del titular: continuar el paquete completo conservando
+  los registros, IDs y estados actuales. No reconstruir ni reasignar los casos
+  historicos sin vinculo. Supabase productivo sigue sin migracion y solo recibio
+  lecturas; el enriquecimiento previo se ensayo en una copia Docker.
+  El titular guardo All Deployments en Vercel Authentication. Dos accesos publicos
+  sin cookies, al dominio estable y a una URL productiva anterior, redirigieron
+  a autenticacion. Esto no certifica exclusion de todas las credenciales o bypasses.
+  Faltan validar los consumidores nuevos, retirar accesos antiguos y completar
+  el respaldo FINAL fresco/restaurado/comparado y su confirmacion antes de SQL.
+  La proteccion tambien bloquea webhooks externos: mantener la ventana acotada
+  y conciliar transacciones antes de la reapertura, sin depender solo de reintentos.
+  Validacion local del mapping exclusivo: 902 pruebas en 37 archivos, lint y
+  build demo aislado correctos; QA independiente aprueba este diff local, no
+  acredita credenciales, respaldo FINAL, migracion ni habilitacion productiva.
 - Restriccion posterior: no crear recursos adicionales; usar las cuentas desde
   la sesion correcta del navegador, sin conectores de cuentas. No se creo el
-  entorno externo propuesto. Solo se pauso Repository Activity durante el corte;
-  los datos productivos permanecen sin modificar.
+  entorno externo propuesto. El usuario pauso Monthly Charges y Keepalive; el
+  asistente pauso Repository Activity. Los tres figuran disabled_manually y no
+  hubo runs activos entre los 100 consultados. No demuestra exclusion de otros
+  escritores; no se ejecutaron escrituras productivas en esta preparacion.
 - Ruta publica principal: `/donar`.
 - Version visible en el footer: tomada desde `package.json`.
 - Pagos mensuales: tarjeta debito/credito con tokenizacion Wompi.
@@ -194,13 +233,28 @@ Variables principales para GitHub Actions, environment `Production`:
 
 ```txt
 SUPABASE_URL
-SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_SERVICE_ROLE_KEY_V030
 NEXT_PUBLIC_WOMPI_PUBLIC_KEY_PROD
 WOMPI_PRIVATE_KEY_PROD
 WOMPI_INTEGRITY_SECRET_PROD
 CRON_SECRET
 KEEPALIVE_URL
 ```
+
+El workflow nuevo mapea exclusivamente `SUPABASE_SERVICE_ROLE_KEY_V030` al
+nombre `SUPABASE_SERVICE_ROLE_KEY` que espera el SDK. No tiene fallback al secret
+antiguo. Vercel y el backend conservan el nombre existente; no crear una variable
+con sufijo V030 en Vercel. La credencial nueva sigue accediendo al mismo proyecto,
+no crea otra base ni separa sus datos.
+
+Preparar la llave exclusiva y verificar los consumidores nuevos antes de retirar
+la anterior. Las definiciones antiguas de workflows no deben recibir la nueva
+credencial mediante el nombre del secret anterior. Crear otra llave no revoca la
+anterior ni demuestra aislamiento por si solo. No habilitar jobs ni cobros para
+verificarla; el corte, retiro y respaldo final siguen siendo gates pendientes.
+El nombre identificativo propuesto en Supabase es `hpe_prod_v030`: el formulario
+admite minusculas, digitos y guiones bajos, no guiones. No confundir este nombre
+con la variable del backend o el secret de GitHub.
 
 Notas:
 

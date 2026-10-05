@@ -13,6 +13,14 @@ describe("billing job modes", () => {
     expect(workflow).toContain("  ping:\n    if: github.ref == 'refs/heads/main'\n    environment: Production");
   });
 
+  it("uses only the exclusive 0.3.0 Supabase secret for monthly charges", () => {
+    const workflow = readFileSync(".github/workflows/monthly-charges.yml", "utf8")
+      .replaceAll("\r\n", "\n");
+    expect(workflow).toContain("          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_V030 }}\n");
+    expect(workflow.match(/^\s*SUPABASE_SERVICE_ROLE_KEY:/gm)).toHaveLength(1);
+    expect(workflow).not.toMatch(/\bsecrets\.SUPABASE_SERVICE_ROLE_KEY\b/);
+  });
+
   it.each(["inventory", "reconcile", "charge"])("requires explicit CLI mode %s", (mode) => {
     expect(parseBillingJobMode([`--mode=${mode}`])).toBe(mode);
     expect(assertBillingJobRuntime(mode, local)).toBe(mode);

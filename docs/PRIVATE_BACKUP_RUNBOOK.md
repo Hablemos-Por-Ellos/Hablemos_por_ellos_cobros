@@ -13,6 +13,15 @@ URLs privadas, datos de donantes ni archivos de respaldo.
 - Conservar la clave privada utilizada al crear la copia: cambiar la contrasena
   PostgreSQL despues no cambia la clave de archivos ya cifrados.
 - Guardar fuera del repo y conservar una segunda copia privada. No hay borrado automatico.
+- En Windows, verificar ACL NTFS y acceso del operador que va a restaurar;
+  mode:0600 no acredita por si solo permisos NTFS. No abrir la copia a Todos.
+  Si el proceso autorizado no puede leerla, detenerse y resolver el acceso con
+  el titular antes de declarar la copia restaurable o crear mas destinos.
+  Verificar tambien que existan los grants requeridos en cada archivo, no solo
+  que no haya grants ajenos. Una DACL protegida vacia deniega la lectura normal.
+  No aplicar recursivamente a archivos la retirada de herencia junto con flags
+  de grant exclusivos de directorios. Los flags (OI)/(CI) son de directorio;
+  verificar grants de archivo efectivos y lectura despues de cualquier ajuste.
 - El dump contiene metadatos de Storage, no sus archivos. Si hay objetos, completar
   su respaldo separado; la herramienta no certifica una copia incompleta.
 
@@ -76,8 +85,9 @@ columnas originales, marcador y postflight antes del unico COMMIT.
 
 El watchdog limita a 300 segundos la fase escritora; no incluye descifrar el
 backup ni la observacion posterior de recuperacion. Los wrappers exteriores
-solo se extraen de los tres archivos SQL versionados reconocidos. El archivo
-de migracion original y su digest permanecen intactos.
+solo se extraen de los tres archivos SQL versionados reconocidos. El contenido
+logico de la migracion no se modifico; verificar la huella fisica del artefacto
+exacto, incluyendo saltos de linea, antes de aplicarlo o comparar un marcador.
 
 Los locks no impiden cambios globales de roles/funciones ni crear otros objetos:
 la exclusion de escritores DDL/ACL sigue siendo un requisito operativo. El
@@ -89,3 +99,73 @@ no necesariamente el COMMIT del intento actual. En cualquier fallo el resultado
 sigue siendo no verificado, conserva cutover y no reintenta automaticamente.
 El ensayo local del guard utiliza un manifiesto ficticio en memoria y transporte
 local; no sustituye la prueba de descifrado/restauracion del respaldo final real.
+
+## Huella y verificacion operativa - 2026-10-04
+
+El checkout Windows cambio los saltos de linea fisicos de la SQL a CRLF, sin
+cambios de contenido registrados por Git. No confundir equivalencia normalizada
+con identidad binaria: conservar el archivo exacto ensayado y registrar su SHA-256
+al aplicar. El marcador y el observador utilizan esa huella, no una historica.
+
+La nueva copia de preparacion del 4 de octubre se creo correctamente, pero su
+primera restauracion quedo NO VERIFICADA por acceso denegado local a los archivos.
+La lectura manual fuera de Codex reprodujo el error. Get-Acl confirmo una DACL
+protegida vacia en los tres archivos, mientras la carpeta conserva los grants
+de la cuenta creadora y SYSTEM. Es un error del ajuste NTFS, no un bloqueo de
+sandbox demostrado. Tras autorizacion explicita se corrigieron solo los tres
+archivos con grants de archivo del operador y SYSTEM, sin flags de directorio
+ni recurrencia. Se verificaron grants requeridos, ausencia de grants ajenos,
+lectura y coincidencia con los hashes cifrados originales.
+
+La restauracion posterior termino con 43 tablas/409 filas y cero diferencias,
+cobertura 5, comparacion de columnas originales y permisos de schema/columna.
+La segunda copia se creo despues de actualizar verification.json: los tres
+archivos coinciden por SHA-256. En su carpeta vacia se fijo primero una ACL
+privada; los archivos copiados conservaron grants al desactivar herencia con
+copia de ACEs, no retirandolas. Ambas copias siguen privadas y legibles.
+
+Se ensayaron aplicacion/reaplicacion del artefacto SQL exacto en la copia Docker
+restaurada, sin red externa. El laboratorio contiene ahora el esquema ensayado,
+no una base vacia. No restaurar encima ni usarlo como destino del respaldo final.
+El respaldo cifrado no se modifico por el ensayo. Las copias permanecen en el
+mismo PC: no certifican una copia externa o recuperacion ante perdida del equipo.
+Esto NO es el respaldo FINAL: antes del corte efectivo faltan excluir escritores,
+crear/verificar una copia fresca y el mensaje obligatorio previo a SQL productiva.
+Evidencia vigente: docs/CUTOVER_2026-10-04.md.
+
+El laboratorio de preparacion se uso despues para ensayar conciliacion historica:
+37 pagos existentes recibieron solo reference, approved_at, provider_effective_at
+y billing_review_required verificados; se agregaron 37 eventos canonicos.
+Sus agendas y campos originales permanecieron iguales. El ensayo y su repeticion
+no modificaron los archivos cifrados: sus hashes originales y la segunda copia
+se comprobaron nuevamente. No confundir el estado enriquecido del laboratorio
+con el snapshot original ni con una conciliacion productiva. La restauracion
+del respaldo final necesita otro destino vacio y aislado; no sobrescribir este.
+
+Generar los manifiestos comparados dentro de transacciones con contexto
+equivalente. databaseManifest usa SET LOCAL search_path=pg_catalog, que fuera
+de una transaccion no fija ese contexto; en el diagnostico local produjo
+diferencias de representacion en dependencies, triggers y policies sin cambios
+reales. No omitir diferencias ni permitir escrituras para hacer pasar el guard:
+corregir el contexto del ensayo y repetir la comparacion antes de COMMIT.
+
+Restriccion posterior del titular: dejar las bases tal cual. No ejecutar mas
+escrituras ni una migracion productiva sin nueva autorizacion. Conservar las
+copias y el laboratorio ya ensayado, sin borrar ni restaurar automaticamente
+para deshacer pruebas. Supabase productivo solo recibio consultas de lectura.
+
+Continuacion autorizada posterior: el titular pidio completar el paquete
+conservando todos los registros, IDs y estados. La restriccion historica anterior
+no bloquea preparar el corte, pero no se autoriza reconstruir casos ambiguos,
+omitir gates, cobrar ni reabrir. All Deployments fue guardado por el titular;
+dos accesos publicos redirigen a autenticacion. Eso no revoca claves retenidas:
+validar consumidores con la credencial exclusiva y retirar accesos antiguos
+antes de crear el respaldo FINAL fresco. La creacion de esa llave y su guardado
+privado por el titular siguen pendientes; no copiar valores a este documento.
+
+El respaldo de preparacion y su gemela siguen intactos, no son el FINAL. Para
+la nueva copia usar un destino vacio distinto, comprobar ACL requeridas y hashes,
+restaurar/comparar contenido, IDs, esquema y permisos y conservar segunda copia.
+Justo antes de SQL productiva, publicar la confirmacion obligatoria en el chat;
+sin esa evidencia y mensaje no ejecutar la migracion. No restaurar encima del
+laboratorio ya migrado/enriquecido ni sobrescribir actividad posterior.

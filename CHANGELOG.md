@@ -2,6 +2,57 @@
 
 ## 0.3.0 - 2026-10-03 - Pending Publication
 
+- 2026-10-04: resume the complete package with explicit preservation of existing
+  records, IDs and subscription states; do not reconstruct ambiguous history.
+  Record owner-saved All Deployments protection and two unauthenticated GET
+  redirects, without certifying all writers excluded. Final backup, migration,
+  exclusive-credential setup/retirement and financial reopening remain pending.
+- 2026-10-04: map Monthly Charges only to the version-specific GitHub secret
+  SUPABASE_SERVICE_ROLE_KEY_V030, without an old-secret fallback. Keep the SDK
+  environment name unchanged and add a workflow contract regression test.
+  This local change does not replace credentials, publish or enable workflows.
+- 2026-10-04: repeat 902 tests in 37 files, lint and the isolated demo build;
+  independent QA approves this local diff, not production readiness. Correct
+  the proposed Supabase key label to hpe_prod_v030 after the owner's screenshot
+  rejects hyphens; key creation and private configuration remain owner actions.
+- 2026-10-04: refresh read-only pre-cut evidence and create a new encrypted
+  preparation backup. Record local restore access denial, observed Preview
+  maintenance response and outstanding writer-exclusion/human handoff gates;
+  do not claim final backup, production migration or financial enablement.
+- 2026-10-04: diagnose the backup-access failure using the user's independent
+  read and NTFS ACL inspection. The three files have empty protected DACLs after
+  the permission adjustment; this is not a proven sandbox restriction. With
+  explicit approval, repair only those files for the operator and SYSTEM;
+  verify required grants, readability and unchanged encrypted hashes.
+- 2026-10-04: restore the preparation backup offline: 43 tables/409 rows,
+  zero content/schema/ACL differences, coverage 5. Preserve a private second
+  copy with matching hashes for all three files. Rehearse the exact CRLF SQL
+  artifact and reapplication on that isolated copy, with original-row checks
+  before/after each local commit. No production migration, charge or final
+  cutover-backup certification; old-writer exclusion remains pending.
+- 2026-10-04: record the offline historical classification without fabricating
+  approval times: 37 approved payments require reconciliation and seven events
+  require review. The production GET-only observation stopped before any
+  request because the explicit local production credential is unavailable.
+- 2026-10-04: after private credential activation, verify all 39 recorded
+  transactions using provider GETs only. Rehearse enrichment of 37 approval
+  dates and 37 idempotent replays through the existing SQL function on the
+  isolated restored copy; preserve original rows, schedules, financial totals,
+  schema and ACLs. A verifier-context failure rolled back before local commit;
+  repeat with equivalent transaction contexts passed. No runtime/SQL change.
+  Five additional legacy events have no linked payment/subscription in current
+  read-only production inspection; provider GETs confirm two approved and
+  three declined. Keep these cases unresolved pending private classification,
+  with production migration and financial reopening blocked.
+- 2026-10-04: review the legacy single-payment callback dependency and webhook
+  early return as possible orphan-event paths, not proven historical causes.
+  Current-donor email correspondence does not authorize subscription linkage;
+  preserve ambiguous events and separate this finding from reported scheduler
+  downtime. No record insertion, reassignment or new runtime change.
+- 2026-10-04: honor the owner's instruction to leave databases as they are.
+  Keep historical cases untouched and require new explicit authorization before
+  production migration or any further database write. Productive data received
+  reads only; earlier enrichment was limited to the isolated restored copy.
 - 2026-10-04: identify fictitious admin data in the responsive header with
   explicit user approval. Keep the real admin subtitle and public donation
   routes unchanged; verify Production cannot enable the administrative demo.
@@ -100,7 +151,9 @@ fixture; this does not validate charges, populated pagination or production.
 - 2026-10-04: compare the complete final-backup manifest under the same table
   locks as the migration; preserve newly admitted receipts in the protected
   baseline and run preservation/postflight before the single COMMIT. Keep the
-  original migration SQL/digest unchanged and keep uncertain-commit recovery.
+  versioned migration's logical content unchanged and retain uncertain-commit
+  recovery. Windows CRLF changes the physical digest; identify, rehearse and
+  preserve the exact artifact before applying or checking a migration marker.
 - 2026-10-04: verify initial migration and reapplication in existing fictitious
   PostgreSQL labs, plus concurrent receipts, backup drift and lock timeout.
   No production SQL, final backup, commit, push, deployment or financial enablement.
