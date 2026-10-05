@@ -2,6 +2,10 @@
 
 ## 0.3.0 - 2026-10-03 - Published In Maintenance, Financial Enablement Pending
 
+- 2026-10-04: verify owner-disabled public signup without creating accounts.
+  Record pending production Auth URLs and built-in email delivery restrictions;
+  defer the administrator's invitation until setup and superadmin validation
+  are complete, because the recipient will activate it immediately.
 - 2026-10-04: publish the scoped migration operator and verified SQL evidence
   as fcb5689 through branch/dev/main; Production is READY with the stable domain
   assigned. Refresh the admin setup guide to distinguish completed migration

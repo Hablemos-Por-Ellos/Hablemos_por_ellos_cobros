@@ -14,8 +14,8 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
   privadas se conservan. Tambien hay dos copias cifradas posteriores a SQL
   (50 tablas/411 filas), consistentes entre si, todavia sin ensayo de restauracion.
 - `/admin/login` ya muestra el ingreso real, pero no se crearon cuentas ni
-  enviaron invitaciones. Auth todavia permite registro publico: debe deshabilitarse
-  antes de completar las cuentas autorizadas y validar MFA en Production.
+  enviaron invitaciones. El titular deshabilito el registro publico en Auth y
+  se verifico el guardado. Faltan URLs, cuentas autorizadas y MFA en Production.
 - Inventario productivo de solo lectura: 37 pagos aprobados historicos requieren
   verificar sus nuevas fechas efectivas. No son cobros fallidos ni nuevos cargos;
   la conciliacion debe completarse antes de habilitar operaciones financieras.

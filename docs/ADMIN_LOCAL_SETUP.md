@@ -74,6 +74,15 @@ Antes de preparar las invitaciones reales, comprobar URLs exactas del dominio
 productivo para que nadie reciba un enlace de Preview. Cada titular define su
 contrasena y enrola su propio Authenticator; no hacerlo en su nombre.
 
+Condicion posterior del titular: el administrador usara el enlace al recibirlo.
+No generar/entregar su invitacion hasta completar configuracion, permisos y
+prueba productiva con el superadministrador. Crear allowlist/registro de
+invitacion antes de entregarla; las contrasenas y MFA son acciones personales.
+El correo incorporado de Supabase solo entrega a miembros de la organizacion;
+no prometer entrega externa sin SMTP. Puede generarse el enlace sin enviarlo
+automaticamente para una entrega privada acordada al final, sin guardarlo en
+el repositorio. Canal pendiente de confirmar; no enviar invitaciones todavia.
+
 Guardar abre el resumen Antes/Despues y la confirmacion. Volver, cerrar o Escape
 no guardan. Confirmar no genera un cobro ni modifica pagos anteriores.
 
@@ -95,8 +104,9 @@ Estado vigente: el usuario configuro Vercel personalmente. El asistente no guard
 variables ni cambia protecciones. Rama/dev/main publicados con autorizacion;
 Preview permanece en demo sin credenciales privadas productivas. La migracion
 productiva se aplico el 2026-10-05T02:21:40.210Z tras verificar el respaldo FINAL.
-No repetir SQL por los pendientes de Auth. Registro publico aun habilitado,
-sin cuentas ni invitaciones; 37 pagos historicos necesitan fechas verificadas
+No repetir SQL por los pendientes de Auth. Registro publico deshabilitado por
+el titular y guardado verificado; sin cuentas ni invitaciones. 37 pagos historicos
+necesitan fechas verificadas
 antes de abrir finanzas. Cobros deshabilitados y workflows operativos pausados.
 La autorizacion de publicacion/migracion no abre donaciones ni habilita cargos.
 Ver `docs/CUTOVER_2026-10-04.md` para evidencia y limites de las pruebas remotas.
