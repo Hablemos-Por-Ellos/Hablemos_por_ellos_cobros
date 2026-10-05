@@ -20,6 +20,14 @@
   Reconfirm cutover/false, demo and three disabled operational workflows.
   Deployed-consumer verification, old-access retirement and final backup/SQL
   remain pending; no provider charge or production database write.
+- 2026-10-04: publish validated worktree/dev checkpoint e5b57ed and observe both
+  READY Previews; dev renders fictitious data, version and seven-character revision.
+  Verify the local secret against a bounded Auth admin GET without creating users.
+  Keep main, credential retirement, final backup and production migration pending.
+- 2026-10-04: receive explicit authorization to publish main in maintenance;
+  keep production SQL gated by verified final backup and separate financial
+  reopening approval. Organization-level job controls remain unverified (403);
+  operational workflows stay disabled.
 - 2026-10-04: refresh read-only pre-cut evidence and create a new encrypted
   preparation backup. Record local restore access denial, observed Preview
   maintenance response and outstanding writer-exclusion/human handoff gates;

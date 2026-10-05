@@ -169,3 +169,12 @@ restaurar/comparar contenido, IDs, esquema y permisos y conservar segunda copia.
 Justo antes de SQL productiva, publicar la confirmacion obligatoria en el chat;
 sin esa evidencia y mensaje no ejecutar la migracion. No restaurar encima del
 laboratorio ya migrado/enriquecido ni sobrescribir actividad posterior.
+
+Antes del snapshot FINAL, cutover por si solo no acredita ausencia de escrituras.
+Mantener pausados keepalive y reconcile y excluir llamadas directas; la limpieza
+de intents puede escribir cuando existe su RPC y Auth tiene operaciones mutantes.
+Drenar procesos antes de retirar accesos: un job legacy que supero sus lecturas
+puede enviar un cargo aunque la llave se revoque despues. Excluir tambien APIs
+antiguas capaces de generar firmas sin DB. No reconstruir codigo antiguo con
+la configuracion nueva ni reutilizar el nombre GitHub anterior para la llave nueva.
+HEAD/GET SDK local y metadata cloud no acreditan el consumidor Production activo.

@@ -89,6 +89,14 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
   sus valores remotos no se leyeron ni compararon. Cutover/false y demo siguen
   configurados; falta comprobar consumidores desplegados y retirar accesos
   anteriores antes del respaldo FINAL y la SQL.
+  Checkpoint posterior: rama y dev publicados en e5b57ed; ambas Previews READY.
+  La de dev muestra datos ficticios, version 0.3.0 y revision e5b57ed accesible.
+  La nueva credencial local tambien fue aceptada por un GET de Auth administrativo
+  acotado, sin crear cuentas. Esto no acredita la credencial efectiva de Production;
+  main, retiro de accesos anteriores y respaldo FINAL siguen pendientes.
+  Autorizacion posterior: publicar main protegido en mantenimiento y continuar
+  el paquete. La migracion permanece condicionada al respaldo FINAL restaurado
+  y comparado y su confirmacion previa en el chat; no autoriza cobros/reapertura.
 - Restriccion posterior: no crear recursos adicionales; usar las cuentas desde
   la sesion correcta del navegador, sin conectores de cuentas. No se creo el
   entorno externo propuesto. El usuario pauso Monthly Charges y Keepalive; el
