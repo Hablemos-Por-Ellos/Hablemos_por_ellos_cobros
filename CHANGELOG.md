@@ -9,8 +9,11 @@
   reactivation controls. Preserve monthly counters and existing API guard.
 - Add deterministic local fixtures and regressions. No migration or payment,
   webhook, job, authentication or production-data mutation in this patch.
-- Owner authorizes commit/push; publication verification pending. Keep
-  maintenance and financial gates unchanged until separate manual reopening.
+- Publish code f45b007 through branch/dev/main. Verify dev's fictional Preview,
+  Production deployment success and the stable authenticated admin showing
+  0.3.1 and contribution types; no demo in Production. Keep maintenance and
+  financial gates unchanged until separate manual reopening. Full suite:
+  968 tests, lint, build and scoped independent QA pass.
 
 ## 0.3.0 - 2026-10-03 - Published In Maintenance, Financial Enablement Pending
 

@@ -32,7 +32,24 @@ No autoriza al asistente a cambiar Vercel ni hacer cargos con este ajuste.
 QA independiente APRUEBA el patch contra 255e6e2, sin hallazgos bloqueantes:
 110 pruebas focales/regresiones y 17 casos adversariales en memoria correctos,
 sin red, ediciones ni comandos pendientes. Alcance focal, no certificacion
-de todo el paquete/cloud/RLS/Wompi. Despliegue pendiente de registrar.
+de todo el paquete/cloud/RLS/Wompi.
+
+- Commit de codigo f45b007 publicado en rama, dev y main por fast-forward.
+- Preview dev: En7g5UAXyyTx5gwcCkDHVQrVaWSh, deployment GitHub 6851611036,
+  success, URL j5f1uq4vl. Admin abierto con sesion normal de Vercel muestra
+  fixtures, ambos tipos y 0.3.1; nunca donantes reales.
+- Production: CfHEeuAy83ACwbUwdhacThHAcoPk, deployment GitHub 6851632923,
+  success 2026-10-05T04:54:23Z; URL generada o1380ar61. Dominio estable:
+  https://hablemos-por-ellos-cobros.vercel.app. Vercel no expone imagen Docker;
+  identificadores de deployment y commit son referencias verificables.
+- GET dominio estable: admin/login 200 con 0.3.1, sin demo; admin 307 login;
+  donar 307 mantenimiento; acceptance 503 con mensaje mantenimiento.
+- Tras recargar la sesion existente del titular: heading Aportes y suscripciones,
+  filtros Todos/Mensual/Unico, MFA activo, 0.3.1, unico visible, sin demo y
+  operaciones financieras deshabilitadas. No ejecutar acciones sobre donantes.
+- Revision de recuperacion anterior 255e6e2 conservada (deployment GitHub
+  6850361960). El tag/release se registra sobre la revision documental final,
+  sin modificar otra vez el codigo validado; volver a verificar ese deploy.
 No confundir compilacion local con deploy READY ni push con reanudacion.
 
 GitHub consultado: tres workflows operativos disabled_manually. Variables

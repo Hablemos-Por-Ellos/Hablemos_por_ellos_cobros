@@ -6,11 +6,12 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
 
 - Ajuste `0.3.1`: Mensual/Unico visibles y filtrables en el admin, incluidos
   los aportes unicos de consulta; sin modificar datos ni tablas. Los contadores
-  recurrentes conservan su alcance mensual. Commit/push autorizados; verificar
-  publicacion y revision activa antes de declarar desplegado.
+  recurrentes conservan su alcance mensual. Codigo f45b007 publicado por
+  rama/dev/main y verificado READY en Vercel; login y admin con MFA muestran
+  0.3.1 y los filtros reales. Validacion: `docs/VALIDATION_0.3.1.md`.
   Reapertura manual: `docs/REOPENING_0.3.1.md`. No abrir cobros con un push:
   las variables de Vercel y GitHub son independientes.
-- Version `0.3.0` publicada en `main` y Production, en mantenimiento/cutover.
+- Version `0.3.1` publicada en `main` y Production, en mantenimiento/cutover.
   Los cobros permanecen deshabilitados y los tres workflows operativos pausados.
 - Migracion productiva `payment-admin-hardening-v0.3.0` aplicada y confirmada
   el `2026-10-05T02:21:40.210Z` (4 de octubre en Colombia). Una conexion nueva

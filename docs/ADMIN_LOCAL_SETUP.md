@@ -1,6 +1,6 @@
 # Panel administrativo: preparacion local
 
-Version 0.3.0. El procedimiento siguiente explica el laboratorio local; no
+Version UI 0.3.1, esquema 0.3.0. El procedimiento siguiente explica el laboratorio local; no
 autoriza crear cuentas reales ni habilitar cobros. Codigo y migracion SQL ya
 publicados/aplicados en Production, en mantenimiento/cutover, con registros
 originales preservados y conciliacion historica de 37 pagos aprobados completada

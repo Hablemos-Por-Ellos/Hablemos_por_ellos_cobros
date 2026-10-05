@@ -1,7 +1,7 @@
 # Tipo de aporte administrativo - diseno aprobado
 
 Fecha: 2026-10-04 Colombia.
-Version: 0.3.1; implementada localmente, validacion/publicacion en curso.
+Version: 0.3.1; implementada, validada y publicada en mantenimiento.
 Base verificada: 0.3.0 publicada en main; rama de trabajo
 codex/admin-wompi-hardening. Conservar todos los cambios documentales existentes.
 

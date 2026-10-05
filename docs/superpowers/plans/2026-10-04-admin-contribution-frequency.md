@@ -15,4 +15,6 @@ No alterar datos, SQL, configuracion Vercel, cuentas o bloqueos financieros.
    sin perder cambios ajenos; comprobar despliegue y mantenimiento.
 6. Registrar evidencia en Obsidian y entregar pasos de reapertura manual.
 
-Estado: en implementacion; no afirmar publicacion hasta verificar Vercel.
+Estado: implementacion, pruebas y QA completados; codigo f45b007 publicado
+en rama/dev/main y verificado en Preview y Production. Reapertura manual
+pendiente; no se hicieron escrituras productivas de datos ni cargos.
