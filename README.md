@@ -83,6 +83,12 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
   Validacion local del mapping exclusivo: 902 pruebas en 37 archivos, lint y
   build demo aislado correctos; QA independiente aprueba este diff local, no
   acredita credenciales, respaldo FINAL, migracion ni habilitacion productiva.
+  El titular ya creo y guardo la llave exclusiva. SDK local: un HEAD permitido
+  al proyecto esperado, conteo 27 y cero filas devueltas/escrituras. Vercel
+  muestra el secret solo Production y GitHub el secret V030 actualizado;
+  sus valores remotos no se leyeron ni compararon. Cutover/false y demo siguen
+  configurados; falta comprobar consumidores desplegados y retirar accesos
+  anteriores antes del respaldo FINAL y la SQL.
 - Restriccion posterior: no crear recursos adicionales; usar las cuentas desde
   la sesion correcta del navegador, sin conectores de cuentas. No se creo el
   entorno externo propuesto. El usuario pauso Monthly Charges y Keepalive; el

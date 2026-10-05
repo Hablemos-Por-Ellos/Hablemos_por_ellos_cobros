@@ -15,6 +15,11 @@
   independent QA approves this local diff, not production readiness. Correct
   the proposed Supabase key label to hpe_prod_v030 after the owner's screenshot
   rejects hyphens; key creation and private configuration remain owner actions.
+- 2026-10-04: observe owner-completed exclusive-key configuration: local SDK
+  HEAD accepted, cloud secret names/scopes verified without reading values.
+  Reconfirm cutover/false, demo and three disabled operational workflows.
+  Deployed-consumer verification, old-access retirement and final backup/SQL
+  remain pending; no provider charge or production database write.
 - 2026-10-04: refresh read-only pre-cut evidence and create a new encrypted
   preparation backup. Record local restore access denial, observed Preview
   maintenance response and outstanding writer-exclusion/human handoff gates;
