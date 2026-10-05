@@ -74,10 +74,13 @@ Un subdirectorio con nombre `..algo` sigue estando dentro del repo y se rechaza.
 
 ## Guard del aplicador - 2026-10-04
 
-El aplicador es dueno de una sola transaccion READ COMMITTED. Descubre tablas
-existentes y toma ACCESS EXCLUSIVE con limite de bloqueo de cinco segundos;
+El aplicador es dueno de una sola transaccion READ COMMITTED. Descubre las tablas
+existentes de una lista cerrada de doce tablas public afectadas por esta SQL y
+toma ACCESS EXCLUSIVE con limite de bloqueo de cinco segundos;
 las lecturas/escrituras concurrentes pueden esperar durante esta ventana.
-Compara inventario fresco, contenido y metadatos completos antes del DDL.
+No solicita locks escritores de tablas gestionadas de Auth/Realtime/Storage.
+Compara inventario fresco, contenido y metadatos completos de todas las tablas
+respaldadas antes del DDL; reducir el scope del LOCK no reduce la comparacion.
 Una diferencia fuera de recibos v1 nuevos detiene el proceso sin confirmar.
 Los recibos admitidos pasan a formar parte del baseline protegido: no se
 pueden perder durante SQL. Restablece search_path y verifica preservacion de
@@ -178,3 +181,42 @@ puede enviar un cargo aunque la llave se revoque despues. Excluir tambien APIs
 antiguas capaces de generar firmas sin DB. No reconstruir codigo antiguo con
 la configuracion nueva ni reutilizar el nombre GitHub anterior para la llave nueva.
 HEAD/GET SDK local y metadata cloud no acreditan el consumidor Production activo.
+
+Instruccion posterior del titular: conservar llaves actuales y hacer respaldo/SQL
+con los consumidores conocidos pausados/protegidos y codigo cutover/false. No
+certificar retiro de credenciales ni exclusion universal de copias desconocidas.
+El aplicador conserva comparacion fresca bajo locks, preservacion pre-COMMIT y
+parada sin reintento ante cambios o respuesta incierta. Las carpetas padre de
+backup no son necesariamente privadas: fijar ACL en el nuevo destino antes de
+escribir, verificar grants de archivos y no alterar copias anteriores.
+
+Respaldo FINAL del corte 2026-10-04 Colombia creado y restaurado el 5 de octubre
+UTC: 43 tablas/410 filas, cobertura 5, contenido/IDs/esquema/permisos verificados
+sin diferencias. Tres archivos cifrados/evidencia coinciden con la segunda copia
+privada del mismo PC. Destinos y hashes en CUTOVER_2026-10-04.md. Aun exigir el
+mensaje en el chat inmediatamente antes de SQL; no abrir cobros automaticamente.
+
+El primer intento productivo del corte se detuvo sin quedar aplicado: observador
+nuevo verifico parada del escritor, ausencia de marcador y preservacion. Causa:
+el LOCK previo intentaba tablas internas sin privilegio escritor. La lista cerrada
+de tablas de app corrige el aplicador, no la SQL ni permisos productivos. Ensayo
+local con postgres no-superusuario reprodujo 42501 para la tabla interna y paso
+el scope corregido. Para probar DDL como en origen, alinear el propietario de la
+DB de laboratorio con el de origen: pg_database_owner depende de ese contexto.
+No conceder permisos mas amplios al origen para compensar diferencias del lab.
+El ensayo completo migro ahora la DB FINAL local; ya no es un destino vacio.
+Conservarla y las copias cifradas; no restaurar encima. Nuevo intento productivo
+solo tras inspeccion, correccion y pruebas, nunca como reintento automatico.
+
+El nuevo intento controlado del corte confirmo COMMIT productivo el
+2026-10-05T02:21:40.210Z, despues de reiterar la confirmacion del FINAL en chat.
+Observacion independiente: marcador/digest exactos, 43 tablas originales con
+cero diferencias y conteos preservados. Esta SQL ya esta aplicada; no repetirla
+automaticamente al publicar el aplicador ni por nuevos pendientes de Auth.
+
+El respaldo FINAL previo permanece cifrado y restaurado/comparado. Se conserva
+ademas un snapshot posterior 2026-10-05T02:26:21.680Z, 50 tablas/411 filas y
+dos copias privadas con hashes coincidentes. La copia posterior es consistente,
+pero todavia NO restaurada. Destinos/digests en CUTOVER_2026-10-04.md. Mantener
+ambos snapshots y los laboratorios; no restaurar encima de produccion ni perder
+registros posteriores. La migracion de datos no revierte dinero en Wompi.

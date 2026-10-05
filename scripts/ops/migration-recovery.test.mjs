@@ -382,6 +382,7 @@ for (const [label, changeBefore] of [
   ["new column permission", (manifest) => { manifest.columnPermissions.push({ schema: "public", table_name: "webhook_events", name: "raw", acl: ["anon"] }); }],
   ["new role", (manifest) => { manifest.roles.push({ rolname: "unbacked-role", rolcanlogin: true }); }],
   ["new function permission", (manifest) => { manifest.functionPermissions.push({ name: "unbacked", acl: ["PUBLIC"] }); }],
+  ["managed table drift", (manifest) => { manifest.tables.push({ schema: "auth", name: "users", columns: ["id"], keys: ["id"], count: 0, rows: [] }); }],
 ]) {
   test(`backup drift blocks all DDL before COMMIT: ${label}`, async () => {
     const fixture = guardedFixture({ changeBefore });
@@ -445,6 +446,48 @@ test("empty inventory refuses table locks without changing data", async () => {
   const client = new MockClient(async () => ({ rows: [] }));
   await assert.rejects(lockMigrationTables(client), /MIGRATION_TABLE_INVENTORY_REQUIRED/);
   assert.equal(client.calls.length, 1);
+});
+
+test("migration locks only its application tables, not provider-managed schemas", async () => {
+  const client = new MockClient(async (sql, values) => {
+    if (sql.includes("c.relkind in ('r','p')")) {
+      assert.match(sql, /n\.nspname='public'/);
+      assert.match(sql, /c\.relname=any\(\$1::text\[\]\)/);
+      for (const name of ["donors", "subscriptions", "payments", "webhook_events", "audit_logs",
+        "admin_users", "checkout_intents", "payment_attempts", "payment_admin_migrations"]) {
+        assert.ok(values[0].includes(name));
+      }
+      return { rows: [{ schema: "public", name: "subscriptions" }, { schema: "public", name: "webhook_events" }] };
+    }
+    assert.equal(sql, 'LOCK TABLE "public"."subscriptions","public"."webhook_events" IN ACCESS EXCLUSIVE MODE');
+    return { rows: [] };
+  });
+  await lockMigrationTables(client);
+  assert.equal(client.calls.length, 2);
+});
+
+test("out-of-scope lock inventory is rejected instead of locking managed tables", async () => {
+  for (const table of [{ schema: "auth", name: "schema_migrations" },
+    { schema: "storage", name: "migrations" }, { schema: "realtime", name: "schema_migrations" },
+    { schema: "public", name: "unreviewed_table" }]) {
+    const client = new MockClient(async () => ({ rows: [table] }));
+    await assert.rejects(lockMigrationTables(client), /MIGRATION_TABLE_INVENTORY_OUTSIDE_SCOPE/);
+    assert.equal(client.calls.length, 1);
+  }
+});
+
+test("lock failures report only a fixed phase and SQLSTATE, never driver details", async () => {
+  const fixture = guardedFixture();
+  const handler = fixture.writer.handler;
+  fixture.writer.handler = async (sql, values) => {
+    if (sql.startsWith("LOCK TABLE")) throw Object.assign(new Error("private-driver-message"), { code: "42501" });
+    return handler(sql, values);
+  };
+  await assert.rejects(applyPaymentMigration(productionFixtureArgs, fixture.dependencies));
+  assert.equal(fixture.output[0].failurePhase, "application_table_locks");
+  assert.equal(fixture.output[0].sqlState, "42501");
+  assert.equal(fixture.output[0].automaticRetry, false);
+  assert.doesNotMatch(JSON.stringify(fixture.output), /private-driver-message/);
 });
 
 // Opaque parser-only input; never passed to a driver or used to authenticate.

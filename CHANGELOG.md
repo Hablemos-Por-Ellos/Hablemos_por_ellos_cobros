@@ -1,6 +1,19 @@
 # Changelog
 
-## 0.3.0 - 2026-10-03 - Pending Publication
+## 0.3.0 - 2026-10-03 - Published In Maintenance, Financial Enablement Pending
+
+- 2026-10-04 Colombia (2026-10-05 UTC): after the required final-backup message,
+  apply the exact production migration and independently verify its marker and
+  digest. Compare all 43 original tables with zero original-record differences;
+  preserve donor/subscription/payment/event/audit counts and keep cutover enabled.
+- Preserve two encrypted post-migration snapshot copies (50 tables/411 rows),
+  with matching hashes and private permissions; do not claim they were restored.
+  The pre-migration final backup was restored and compared before production SQL.
+- Observe the real admin login after schema readiness, without creating users
+  or sending invitations. Read-only inventory identifies 37 legacy approved
+  payments needing verified approval dates; Auth signup is still enabled.
+  Account/MFA setup, reconciliation and separately authorized reopening remain
+  pending. No production charges or workflow re-enablement were performed.
 
 - 2026-10-04: resume the complete package with explicit preservation of existing
   records, IDs and subscription states; do not reconstruct ambiguous history.
@@ -28,6 +41,19 @@
   keep production SQL gated by verified final backup and separate financial
   reopening approval. Organization-level job controls remain unverified (403);
   operational workflows stay disabled.
+- 2026-10-04: publish a89a2c0 by fast-forward to main after dev; Production
+  dpl_GY53wydFDWvGbQ5PP7VWfkoowZSE is READY/Current in maintenance. Observe
+  unchanged original table counts and pre-migration admin guard; no production
+  SQL, credential retirement, financial reopening or charges performed.
+- 2026-10-04: honor the owner's narrower cutover scope: keep current API keys,
+  preserve paused/protected consumers and prepare production SQL. Create and
+  verify the fresh encrypted final backup, isolated restore and matching private
+  twin: 43 tables/410 rows, zero differences and full schema/ACL coverage.
+- 2026-10-04: production attempt stopped safely on provider-managed table locks;
+  independent recovery confirmed not applied and original records preserved.
+  Scope explicit locks to the migration's twelve public tables, retain complete
+  backup comparisons and add sanitized phase/SQLSTATE diagnostics. Validate
+  906 tests, lint and an offline full migration as non-superuser postgres.
 - 2026-10-04: refresh read-only pre-cut evidence and create a new encrypted
   preparation backup. Record local restore access denial, observed Preview
   maintenance response and outstanding writer-exclusion/human handoff gates;

@@ -9,6 +9,9 @@ import { closeMigrationConnection, migrationWriterIdentity, observePaymentMigrat
 
 // v0.3.0 | 2026-10-04. Verify the final backup under the same locks as the migration.
 const MIGRATION = PAYMENT_MIGRATION;
+const MIGRATION_TABLES = ["donors", "subscriptions", "payments", "webhook_events", "audit_logs",
+  "admin_users", "admin_invitations", "admin_audit_logs", "checkout_intents", "payment_attempts",
+  "api_rate_limits", "payment_admin_migrations"];
 export function migrationTransactionBody(sql) {
   // Only the versioned files' outer transaction is removed; PL/pgSQL blocks stay intact.
   const match = sql.match(/^((?:\s|--[^\r\n]*(?:\r?\n|$))*)begin(?:\s+transaction\s+read\s+only)?\s*;([\s\S]*?)\bcommit\s*;\s*$/i);
@@ -52,9 +55,13 @@ export function assertCompleteMigrationManifest(manifest) {
 export async function lockMigrationTables(client) {
   const { rows } = await client.query(`select n.nspname as schema,c.relname as name
     from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
-    where c.relkind in ('r','p') and n.nspname !~ '^pg_' and n.nspname<>'information_schema'
-    order by n.nspname,c.relname`);
+    where c.relkind in ('r','p') and n.nspname='public' and c.relname=any($1::text[])
+    order by n.nspname,c.relname`, [MIGRATION_TABLES]);
   if (!rows.length) throw new Error("MIGRATION_TABLE_INVENTORY_REQUIRED");
+  if (rows.some(({ schema, name }) => schema !== "public" || !MIGRATION_TABLES.includes(name))) {
+    throw new Error("MIGRATION_TABLE_INVENTORY_OUTSIDE_SCOPE");
+  }
+  // Provider-managed schemas remain fully compared, but this migration never writes them.
   const qualified = rows.map(({ schema, name }) => `${quoteIdentifier(schema)}.${quoteIdentifier(name)}`);
   await client.query(`LOCK TABLE ${qualified.join(",")} IN ACCESS EXCLUSIVE MODE`);
 }
@@ -84,6 +91,7 @@ export async function applyPaymentMigration(args, { loadConfig = privateConfig, 
   const client = createClient(url, { ...clientOptions, readOnly: false });
   let writerIdentity;
   let protectedManifest = manifest;
+  let failurePhase = "connect";
   let deadline;
   const ignoreConnectionError = () => {};
   client.on?.("error", ignoreConnectionError);
@@ -102,27 +110,34 @@ export async function applyPaymentMigration(args, { loadConfig = privateConfig, 
     if (typeof settings?.search_path !== "string" || !settings.search_path) throw new Error("MIGRATION_SEARCH_PATH_REQUIRED");
     await client.query("select pg_advisory_xact_lock(hashtextextended('payment_admin_hardening_v0.3.0',0))");
     if (manifest) {
+      failurePhase = "application_table_locks";
       await lockMigrationTables(client);
+      failurePhase = "source_comparison";
       const before = await readManifest(client);
       if (compareManifests(manifest, before, { allowAdditionalReceipts: true, compareMetadata: true,
         compareInventory: true }).length) throw new Error("SOURCE_CHANGED_AFTER_FINAL_BACKUP");
       protectedManifest = before;
     }
     await client.query("select pg_catalog.set_config('search_path',$1,true)", [settings.search_path]);
+    failurePhase = "preflight";
     await client.query(preflight);
     await client.query("select set_config('app.migration_digest',$1,true)", [digest]);
+    failurePhase = "migration";
     await client.query({ text: body, query_timeout: 300000 });
     const marker = await client.query("select digest from public.payment_admin_migrations where name=$1", [MIGRATION]);
     if (marker.rows[0]?.digest !== digest) throw new Error("MIGRATION_MARKER_MISMATCH");
+    failurePhase = "postflight";
     await client.query(postflight);
     if (protectedManifest) {
+      failurePhase = "preservation_comparison";
       const after = await readManifest(client, { original: protectedManifest });
       if (compareManifests(protectedManifest, after).length) throw new Error("PRECOMMIT_PRESERVATION_FAILED_KEEP_CUTOVER");
     }
+    failurePhase = "commit";
     await client.query("COMMIT");
     report.log(JSON.stringify({ operation: "migration_verified", code: "MIGRATION_VERIFIED", verified: true,
       originalRecordsPreserved: Boolean(manifest), keepCutover: true, automaticRetry: false }));
-  } catch {
+  } catch (error) {
     // Close the writer, never inspect or send more SQL on its failed connection.
     const writerConnectionClosed = await closeMigrationConnection(client);
     const recovery = await observePaymentMigration({
@@ -130,7 +145,9 @@ export async function applyPaymentMigration(args, { loadConfig = privateConfig, 
       failedClient: client, writerIdentity, expectedDatabase: decodeURIComponent(url.pathname.slice(1)),
       digest, originalManifest: protectedManifest,
     });
-    report.error(JSON.stringify({ operation: "migration_stopped", verified: false, writerConnectionClosed, ...recovery }));
+    const sqlState = /^[0-9A-Z]{5}$/.test(error?.code ?? "") ? error.code : undefined;
+    report.error(JSON.stringify({ operation: "migration_stopped", verified: false, failurePhase,
+      sqlState, writerConnectionClosed, ...recovery }));
     throw new Error("MIGRATION_STOPPED_NO_AUTOMATIC_RETRY");
   } finally {
     clearTimeout(deadline);

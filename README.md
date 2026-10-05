@@ -4,6 +4,30 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
 
 ## Estado actual
 
+- Version `0.3.0` publicada en `main` y Production, en mantenimiento/cutover.
+  Los cobros permanecen deshabilitados y los tres workflows operativos pausados.
+- Migracion productiva `payment-admin-hardening-v0.3.0` aplicada y confirmada
+  el `2026-10-05T02:21:40.210Z` (4 de octubre en Colombia). Una conexion nueva
+  comparo las 43 tablas originales: cero diferencias en los registros originales.
+  Se conservaron 33 donantes, 27 suscripciones, 39 pagos, 44 eventos y 24 auditorias.
+- El respaldo FINAL previo se restauro y comparo antes de SQL; ambas copias
+  privadas se conservan. Tambien hay dos copias cifradas posteriores a SQL
+  (50 tablas/411 filas), consistentes entre si, todavia sin ensayo de restauracion.
+- `/admin/login` ya muestra el ingreso real, pero no se crearon cuentas ni
+  enviaron invitaciones. Auth todavia permite registro publico: debe deshabilitarse
+  antes de completar las cuentas autorizadas y validar MFA en Production.
+- Inventario productivo de solo lectura: 37 pagos aprobados historicos requieren
+  verificar sus nuevas fechas efectivas. No son cobros fallidos ni nuevos cargos;
+  la conciliacion debe completarse antes de habilitar operaciones financieras.
+- Las llaves actuales se conservaron por instruccion del titular. No se abrieron
+  donaciones ni reanudaron automatismos. Evidencia y pendientes:
+  `docs/CUTOVER_2026-10-04.md`.
+
+## Historial De Preparacion
+
+Los checkpoints siguientes son historicos; los pendientes ya superados no
+sustituyen el estado actual anterior.
+
 - Este arbol prepara `0.3.0`: rama publicada y Preview ficticia, sin release
   ni habilitacion productiva del paquete.
 - La rama productiva `main` conserva `0.2.1`. Vercel confirma el despliegue
@@ -97,6 +121,19 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
   Autorizacion posterior: publicar main protegido en mantenimiento y continuar
   el paquete. La migracion permanece condicionada al respaldo FINAL restaurado
   y comparado y su confirmacion previa en el chat; no autoriza cobros/reapertura.
+  Corte de codigo realizado: main/dev/candidato en a89a2c0 por fast-forward,
+  Production dpl_GY53wydFDWvGbQ5PP7VWfkoowZSE READY/Current, version 0.3.0.
+  El dominio estable muestra mantenimiento y admin cerrado mientras falta el
+  esquema. La DB conserva los conteos originales; SQL y respaldo FINAL pendientes.
+  Instruccion posterior: conservar las llaves actuales y concentrar el corte en
+  respaldo/SQL; el titular confirma que este Supabase solo sirve a esta app.
+  Nuevo respaldo final cifrado/restaurado: 43 tablas, 410 filas, cero diferencias,
+  cobertura 5 y segunda copia privada con hashes iguales. La SQL aun no ejecutada
+  en este checkpoint; retiro de llaves queda diferido, no certificado como hecho.
+  Primer intento SQL detenido y confirmado no aplicado, con originales intactos.
+  Aplicador corregido para bloquear solo tablas public de la app, sin ampliar
+  privilegios; mantiene comparacion completa. 906 tests/lint y ensayo completo
+  local no-superusuario correctos. Nuevo intento controlado pendiente de ejecutar.
 - Restriccion posterior: no crear recursos adicionales; usar las cuentas desde
   la sesion correcta del navegador, sin conectores de cuentas. No se creo el
   entorno externo propuesto. El usuario pauso Monthly Charges y Keepalive; el
@@ -112,7 +149,8 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
 - Deploy de produccion: cada push a `main` activa Vercel.
 - Cobros recurrentes: GitHub Actions `Monthly Charges`.
 - Keepalive Supabase: GitHub Actions `Keepalive`.
-- Panel administrativo: implementacion local pendiente de migracion y habilitacion explicita.
+- Panel administrativo: esquema migrado y codigo publicado; cuentas, MFA y
+  habilitacion financiera todavia pendientes.
 
 ## Seguridad
 
