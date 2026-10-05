@@ -220,3 +220,11 @@ dos copias privadas con hashes coincidentes. La copia posterior es consistente,
 pero todavia NO restaurada. Destinos/digests en CUTOVER_2026-10-04.md. Mantener
 ambos snapshots y los laboratorios; no restaurar encima de produccion ni perder
 registros posteriores. La migracion de datos no revierte dinero en Wompi.
+
+Nueva pareja posterior a la conciliacion: snapshot 2026-10-05T03:35:24.362Z,
+50 tablas/448 filas. Tres SHA-256 coincidentes entre D: y C:, permisos privados
+heredables comprobados antes de generar/copiar y grants de cada archivo
+verificados despues. Destinos/digests en CUTOVER_2026-10-04.md. Conservar las
+copias previas; ninguna se sobrescribio ni se restauro encima del laboratorio.
+Esta copia nueva tiene snapshotConsistent=true y restorationVerified=false:
+no convertir igualdad de hashes o creacion exitosa en prueba de restauracion.

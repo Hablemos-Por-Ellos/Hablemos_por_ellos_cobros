@@ -1,7 +1,55 @@
 # Changelog
 
+## 0.3.1 - 2026-10-04 - Administrative Contribution Types
+
+- Show Mensual / Unico in subscriptions, linked payment history and donor
+  details, with contribution-type filters. Read both monthly and one_time
+  through the existing authenticated, RLS-protected administrative query.
+- Keep one-time contributions read-only without amount/date/cancellation/
+  reactivation controls. Preserve monthly counters and existing API guard.
+- Add deterministic local fixtures and regressions. No migration or payment,
+  webhook, job, authentication or production-data mutation in this patch.
+- Owner authorizes commit/push; publication verification pending. Keep
+  maintenance and financial gates unchanged until separate manual reopening.
+
 ## 0.3.0 - 2026-10-03 - Published In Maintenance, Financial Enablement Pending
 
+- 2026-10-04 Colombia: trace the pre-migration checkout flow, which saved a
+  pending subscription before opening the tokenization widget. Four legacy
+  pending records belong to donors with a different active/approved subscription;
+  eight have no recorded approved payment across their subscriptions. Do not infer exact
+  abandonment/failure or provider settlement without corresponding evidence.
+  Reconfirm three manually disabled workflows and intentional cutover read-only
+  administration; a push alone does not re-enable charges or administrative writes.
+- 2026-10-04 Colombia: owner completes private activation/password/TOTP and
+  reports entry to the real admin; read-only observation confirms invitation
+  consumed and verified TOTP. Compare all 27 subscriptions and their original
+  columns against the final pre-migration snapshot: zero differences.
+  Distinguish 12 pending subscriptions without payment/source/schedule from
+  zero pending payments; retain two past_due and all existing data unchanged.
+  Record the review counter/list presentation mismatch without changing UI,
+  payment behavior or authorizing financial reopening.
+- 2026-10-04 Colombia: prepare only the first superadmin's private activation,
+  with an active UUID allowlist and a one-use invitation registered atomically.
+  Deliver a private local file, not an email or public token URL. Independently
+  compare the five operational tables against the post-reconciliation snapshot:
+  zero differences. Human password/TOTP setup remains pending; do not create
+  the second administrator or schedule delivery before the owner asks tomorrow.
+  Keep financial operations and workflows disabled; no runtime or SQL change.
+- 2026-10-04 Colombia: retain two encrypted post-reconciliation snapshots
+  (50 tables/448 rows), private ACLs and identical SHA-256s; not yet restored.
+  Verify owner-saved Standard Protection and three unauthenticated GET gates:
+  login 200, admin redirects to login 307, payment acceptance maintenance 503.
+  Keep account activation, MFA validation and financial reopening pending.
+- 2026-10-04 Colombia: reconcile 37 existing approved payments in one guarded
+  transaction using verified Wompi GET evidence. Enrich only four new metadata
+  fields and append 37 exact canonical events; preserve all original records,
+  schedules, amounts, tokenized sources and permissions. Verify idempotent
+  replay and commit through a fresh read-only connection; no provider POSTs.
+  Read-only inventory subsequently reports zero due/outstanding/blocked/failures.
+- 2026-10-04 Colombia: verify owner-saved production Site URL and the single
+  exact administrative callback, without wildcards or Preview/localhost URLs.
+  No invitations or accounts created; retain maintenance and financial blocking.
 - 2026-10-04: verify owner-disabled public signup without creating accounts.
   Record pending production Auth URLs and built-in email delivery restrictions;
   defer the administrator's invitation until setup and superadmin validation

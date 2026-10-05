@@ -81,7 +81,16 @@ function donorSubscriptions(data: AdminDemoState, donorId: string) {
 }
 
 function primarySubscription(data: AdminDemoState, donorId: string) {
-  return donorSubscriptions(data, donorId)[0];
+  const subscriptions = donorSubscriptions(data, donorId);
+  return subscriptions.find((item) => item.frequency === "monthly") ?? subscriptions[0];
+}
+
+function contributionLabel(frequency: DemoSubscription["frequency"]) {
+  return frequency === "monthly" ? "Mensual" : "Único";
+}
+
+function nextChargeLabel(subscription: DemoSubscription) {
+  return subscription.frequency === "monthly" ? formatDate(subscription.nextPaymentDate) : "No aplica";
 }
 
 function donorDetailHref(donorId: string, subscriptionId?: string) {
@@ -527,11 +536,12 @@ function RecoveryQueue({
 }
 
 function Dashboard({ data, demo, readOnly, onRecover }: { data: AdminDemoState; demo: boolean; readOnly: boolean; onRecover: (attemptId: string, input: RecoveryInput) => Promise<void> }) {
-  const active = data.subscriptions.filter((subscription) => subscription.status === "active").length;
-  const cancelled = data.subscriptions.filter((subscription) => subscription.status === "cancelled").length;
+  const monthly = data.subscriptions.filter((subscription) => subscription.frequency === "monthly");
+  const active = monthly.filter((subscription) => subscription.status === "active").length;
+  const cancelled = monthly.filter((subscription) => subscription.status === "cancelled").length;
   const pending = data.payments.filter((payment) => payment.status === "pending").length;
-  const review = data.subscriptions.filter((subscription) => subscription.status === "past_due").length + data.recoveryAttempts.length;
-  const reviewSubscriptions = data.subscriptions.filter((subscription) => subscription.status === "past_due" || subscription.status === "pending");
+  const review = monthly.filter((subscription) => subscription.status === "past_due").length + data.recoveryAttempts.length;
+  const reviewSubscriptions = monthly.filter((subscription) => subscription.status === "past_due" || subscription.status === "pending");
 
   return (
     <div className="space-y-7">
@@ -669,9 +679,9 @@ function DonorRow({ donor, subscription }: { donor: DemoDonor; subscription?: De
     <tr className="transition hover:bg-slate-50">
       <td className="px-5 py-4"><p className="font-semibold text-slate-900">{donor.fullName}</p><p className="mt-1 text-xs text-slate-500">{donor.city}</p></td>
       <td className="px-5 py-4 text-slate-600"><p>{listEmail(donor)}</p><p className="mt-1 text-xs">{listPhone(donor)}</p></td>
-      <td className="px-5 py-4 font-semibold tabular-nums text-slate-900">{subscription ? formatCurrencyCOP(subscription.amount) : "—"}</td>
+      <td className="px-5 py-4 font-semibold tabular-nums text-slate-900">{subscription ? <><p>{formatCurrencyCOP(subscription.amount)}</p><p className="mt-1 text-xs font-medium text-slate-500">{contributionLabel(subscription.frequency)}</p></> : "—"}</td>
       <td className="px-5 py-4">{subscription ? <StatusBadge type="subscription" status={subscription.status} /> : "—"}</td>
-      <td className="px-5 py-4 text-slate-600">{subscription ? formatDate(subscription.nextPaymentDate) : "—"}</td>
+      <td className="px-5 py-4 text-slate-600">{subscription ? nextChargeLabel(subscription) : "—"}</td>
       <td className="px-5 py-4 text-right"><Link href={donorDetailHref(donor.id, subscription?.id)} className="inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-foundation-blue" aria-label={`Ver detalle de ${donor.fullName}`} title="Ver detalle"><ChevronRight aria-hidden="true" className="h-4 w-4" /></Link></td>
     </tr>
   );
@@ -685,8 +695,8 @@ function DonorCard({ donor, subscription }: { donor: DemoDonor; subscription?: D
         {subscription && <StatusBadge type="subscription" status={subscription.status} />}
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 text-sm">
-        <div><SmallLabel>Aporte</SmallLabel><p className="mt-1 font-semibold tabular-nums text-slate-900">{subscription ? formatCurrencyCOP(subscription.amount) : "—"}</p></div>
-        <div><SmallLabel>Próximo cobro</SmallLabel><p className="mt-1 text-slate-700">{subscription ? formatDate(subscription.nextPaymentDate) : "—"}</p></div>
+        <div><SmallLabel>Aporte</SmallLabel><p className="mt-1 font-semibold tabular-nums text-slate-900">{subscription ? formatCurrencyCOP(subscription.amount) : "—"}</p>{subscription && <p className="mt-1 text-xs text-slate-500">{contributionLabel(subscription.frequency)}</p>}</div>
+        <div><SmallLabel>Próximo cobro</SmallLabel><p className="mt-1 text-slate-700">{subscription ? nextChargeLabel(subscription) : "—"}</p></div>
       </div>
     </Link>
   );
@@ -694,22 +704,25 @@ function DonorCard({ donor, subscription }: { donor: DemoDonor; subscription?: D
 
 function SubscriptionList({ data }: { data: AdminDemoState }) {
   const [status, setStatus] = useState<"all" | DemoSubscriptionStatus>("all");
+  const [frequency, setFrequency] = useState<"all" | DemoSubscription["frequency"]>("all");
   const [query, setQuery] = useState("");
   const subscriptions = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return data.subscriptions.filter((subscription) => {
       const donor = data.donors.find((item) => item.id === subscription.donorId);
       const matchesStatus = status === "all" || subscription.status === status;
+      const matchesFrequency = frequency === "all" || subscription.frequency === frequency;
       const matchesQuery = !needle || [donor?.fullName, donor?.email, subscription.reference].filter(Boolean).some((value) => value?.toLowerCase().includes(needle));
-      return matchesStatus && matchesQuery;
+      return matchesStatus && matchesFrequency && matchesQuery;
     });
-  }, [data, query, status]);
+  }, [data, query, status, frequency]);
 
   return (
     <div className="space-y-7">
-      <PageHeading eyebrow="Suscripciones" title="Cobros mensuales" description="Las fechas siguen el calendario de Colombia. Esta lista es de solo lectura." />
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr),13rem]">
+      <PageHeading eyebrow="Suscripciones" title="Aportes y suscripciones" description="Fechas según el calendario de Colombia." />
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr),10rem,12rem]">
         <SearchField value={query} onChange={setQuery} placeholder="Buscar por donante, correo o referencia" />
+        <label className="block"><span className="sr-only">Tipo de aporte</span><select value={frequency} onChange={(event) => setFrequency(event.target.value as typeof frequency)} className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-base text-slate-900 focus:border-foundation-blue focus:outline-none focus:ring-2 focus:ring-foundation-blue/20"><option value="all">Todos los tipos</option><option value="monthly">Mensual</option><option value="one_time">Único</option></select></label>
         <label className="block"><span className="sr-only">Filtrar estado</span><select value={status} onChange={(event) => setStatus(event.target.value as typeof status)} className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-base text-slate-900 focus:border-foundation-blue focus:outline-none focus:ring-2 focus:ring-foundation-blue/20"><option value="all">Todos los estados</option><option value="active">Activas</option><option value="pending">Pendientes</option><option value="past_due">Por revisar</option><option value="cancelled">Canceladas</option></select></label>
       </div>
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -719,7 +732,8 @@ function SubscriptionList({ data }: { data: AdminDemoState }) {
               <tr>
                 <th scope="col" className="px-5 py-3">Donante</th>
                 <th scope="col" className="px-4 py-3">Aporte</th>
-                <th scope="col" className="px-4 py-3">Suscripción</th>
+                <th scope="col" className="px-4 py-3">Tipo de aporte</th>
+                <th scope="col" className="px-4 py-3">Estado</th>
                 <th scope="col" className="px-4 py-3">Próximo cobro</th>
                 <th scope="col" className="px-4 py-3">Último pago</th>
                 <th scope="col" className="px-3 py-3"><span className="sr-only">Ver detalle</span></th>
@@ -733,8 +747,9 @@ function SubscriptionList({ data }: { data: AdminDemoState }) {
                   <tr key={subscription.id} className="transition hover:bg-slate-50">
                     <td className="max-w-[18rem] px-5 py-3"><Link href={donorDetailHref(subscription.donorId, subscription.id)} className="block min-w-0"><p className="truncate font-semibold text-slate-900 hover:text-foundation-blue">{donor?.fullName}</p><p className="mt-0.5 truncate text-xs text-slate-500">{subscription.reference}</p></Link></td>
                     <td className="px-4 py-3 font-semibold tabular-nums text-slate-900">{formatCurrencyCOP(subscription.amount)}</td>
+                    <td className="px-4 py-3 text-slate-700">{contributionLabel(subscription.frequency)}</td>
                     <td className="px-4 py-3"><CompactStatus type="subscription" status={subscription.status} /></td>
-                    <td className="px-4 py-3"><p className="font-medium text-slate-800">Día {subscription.preferredPaymentDay}</p><p className="mt-0.5 whitespace-nowrap text-xs text-slate-500">{formatDate(subscription.nextPaymentDate)}</p></td>
+                    <td className="px-4 py-3">{subscription.frequency === "monthly" ? <><p className="font-medium text-slate-800">Día {subscription.preferredPaymentDay}</p><p className="mt-0.5 whitespace-nowrap text-xs text-slate-500">{nextChargeLabel(subscription)}</p></> : <span className="text-slate-500">No aplica</span>}</td>
                     <td className="px-4 py-3">{latestPayment ? <CompactStatus type="payment" status={latestPayment.status} /> : <span className="text-slate-400">Sin pago</span>}</td>
                     <td className="px-3 py-2 text-right"><Link href={donorDetailHref(subscription.donorId, subscription.id)} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-foundation-blue" aria-label={`Ver detalle de ${donor?.fullName ?? "donante"}`} title="Ver detalle"><ChevronRight aria-hidden="true" className="h-4 w-4" /></Link></td>
                   </tr>
@@ -749,8 +764,8 @@ function SubscriptionList({ data }: { data: AdminDemoState }) {
             const latestPayment = data.payments.filter((payment) => payment.subscriptionId === subscription.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
             return (
               <Link key={subscription.id} href={donorDetailHref(subscription.donorId, subscription.id)} className="block px-4 py-3 transition hover:bg-slate-50">
-                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold text-slate-900">{donor?.fullName}</p><p className="mt-0.5 truncate text-xs text-slate-500">{subscription.reference}</p></div><CompactStatus type="subscription" status={subscription.status} /></div>
-                <div className="mt-3 grid grid-cols-3 gap-3 border-t border-slate-100 pt-3 text-sm"><div><SmallLabel>Aporte</SmallLabel><p className="mt-1 font-semibold tabular-nums text-slate-900">{formatCurrencyCOP(subscription.amount)}</p></div><div><SmallLabel>Cobro</SmallLabel><p className="mt-1 font-medium text-slate-800">Día {subscription.preferredPaymentDay}</p></div><div><SmallLabel>Pago</SmallLabel><p className="mt-1">{latestPayment ? <CompactStatus type="payment" status={latestPayment.status} /> : <span className="text-slate-400">Sin pago</span>}</p></div></div>
+                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold text-slate-900">{donor?.fullName}</p><p className="mt-0.5 truncate text-xs text-slate-500">{subscription.reference} · {contributionLabel(subscription.frequency)}</p></div><CompactStatus type="subscription" status={subscription.status} /></div>
+                <div className="mt-3 grid grid-cols-3 gap-3 border-t border-slate-100 pt-3 text-sm"><div><SmallLabel>Aporte</SmallLabel><p className="mt-1 font-semibold tabular-nums text-slate-900">{formatCurrencyCOP(subscription.amount)}</p></div><div><SmallLabel>Cobro</SmallLabel><p className="mt-1 font-medium text-slate-800">{subscription.frequency === "monthly" ? `Día ${subscription.preferredPaymentDay}` : "No aplica"}</p></div><div><SmallLabel>Pago</SmallLabel><p className="mt-1">{latestPayment ? <CompactStatus type="payment" status={latestPayment.status} /> : <span className="text-slate-400">Sin pago</span>}</p></div></div>
               </Link>
             );
           })}
@@ -763,12 +778,21 @@ function SubscriptionList({ data }: { data: AdminDemoState }) {
 
 function PaymentsList({ data }: { data: AdminDemoState }) {
   const [status, setStatus] = useState<"all" | DemoPaymentStatus>("all");
-  const payments = data.payments.filter((payment) => status === "all" || payment.status === status);
+  const [frequency, setFrequency] = useState<"all" | "unlinked" | DemoSubscription["frequency"]>("all");
+  const payments = data.payments.filter((payment) => {
+    const subscription = data.subscriptions.find((item) => item.id === payment.subscriptionId);
+    const matchesFrequency = frequency === "all" || (frequency === "unlinked" ? !subscription : subscription?.frequency === frequency);
+    return matchesFrequency && (status === "all" || payment.status === status);
+  });
 
   return (
     <div className="space-y-7">
       <PageHeading eyebrow="Pagos" title="Historial de transacciones" description="Cada fila representa un intento de pago. Los estados son de solo lectura." />
-      <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-500"><span className="font-semibold tabular-nums text-slate-900">{payments.length}</span> transacciones visibles</p><label className="block w-full sm:w-52"><span className="sr-only">Filtrar pagos por estado</span><select value={status} onChange={(event) => setStatus(event.target.value as typeof status)} className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-base text-slate-900 focus:border-foundation-blue focus:outline-none focus:ring-2 focus:ring-foundation-blue/20"><option value="all">Todos los pagos</option><option value="approved">Aprobados</option><option value="pending">Pendientes</option><option value="declined">Rechazados</option></select></label></div>
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr),11rem,12rem] md:items-center">
+        <p className="text-sm text-slate-500"><span className="font-semibold tabular-nums text-slate-900">{payments.length}</span> transacciones visibles</p>
+        <label className="block"><span className="sr-only">Tipo de aporte</span><select value={frequency} onChange={(event) => setFrequency(event.target.value as typeof frequency)} className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-base text-slate-900 focus:border-foundation-blue focus:outline-none focus:ring-2 focus:ring-foundation-blue/20"><option value="all">Todos los tipos</option><option value="monthly">Mensual</option><option value="one_time">Único</option><option value="unlinked">Sin vincular</option></select></label>
+        <label className="block"><span className="sr-only">Filtrar pagos por estado</span><select value={status} onChange={(event) => setStatus(event.target.value as typeof status)} className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-base text-slate-900 focus:border-foundation-blue focus:outline-none focus:ring-2 focus:ring-foundation-blue/20"><option value="all">Todos los pagos</option><option value="approved">Aprobados</option><option value="pending">Pendientes</option><option value="declined">Rechazados</option></select></label>
+      </div>
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="divide-y divide-slate-100">
           {payments.map((payment) => {
@@ -776,7 +800,7 @@ function PaymentsList({ data }: { data: AdminDemoState }) {
             const donor = data.donors.find((item) => item.id === subscription?.donorId);
             return (
               <Link key={payment.id} href={donor && subscription ? donorDetailHref(donor.id, subscription.id) : "/admin"} className="grid gap-3 px-4 py-4 transition hover:bg-slate-50 sm:grid-cols-[minmax(12rem,1.2fr),auto,auto,minmax(10rem,1fr)] sm:items-center sm:px-5">
-                <div className="min-w-0"><p className="truncate font-semibold text-slate-900">{donor?.fullName}</p><p className="mt-1 truncate text-xs text-slate-500">{payment.wompiTransactionId}</p></div>
+                <div className="min-w-0"><p className="truncate font-semibold text-slate-900">{donor?.fullName ?? "Sin donante vinculado"}</p><p className="mt-1 truncate text-xs text-slate-500">{payment.wompiTransactionId}</p><p className="mt-1 text-xs text-slate-600">{subscription ? contributionLabel(subscription.frequency) : "Sin vincular"}</p></div>
                 <p className="font-semibold tabular-nums text-slate-900">{formatCurrencyCOP(payment.amount)}</p>
                 <StatusBadge type="payment" status={payment.status} />
                 <p className="text-sm text-slate-600 sm:text-right">{formatDate(payment.createdAt, true)}</p>
@@ -784,6 +808,7 @@ function PaymentsList({ data }: { data: AdminDemoState }) {
             );
           })}
         </div>
+        {payments.length === 0 && <p className="px-5 py-10 text-center text-sm text-slate-500">No hay pagos que coincidan con los filtros.</p>}
       </section>
     </div>
   );
@@ -811,7 +836,7 @@ export function DonorDetail({ data, donorId, subscriptionId, demo, readOnly, onM
   const subscriptions = donorSubscriptions(data, donorId);
   const subscription = subscriptionId
     ? subscriptions.find((item) => item.id === subscriptionId)
-    : subscriptions[0];
+    : primarySubscription(data, donorId);
   const [selectedDay, setSelectedDay] = useState<1 | 6 | 16 | 28>(subscription?.preferredPaymentDay ?? 16);
   const [selectedMonth, setSelectedMonth] = useState(monthFromDate(subscription?.nextPaymentDate ?? null));
   const [amount, setAmount] = useState(String(subscription?.amount ?? 1500));
@@ -827,7 +852,7 @@ export function DonorDetail({ data, donorId, subscriptionId, demo, readOnly, onM
   const submittingRef = useRef(false);
 
   const openAction = useCallback((action: AdminMutation["action"]) => {
-    if (readOnly || submittingRef.current) return;
+    if (readOnly || subscription?.frequency !== "monthly" || submittingRef.current) return;
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     expectedVersionRef.current = subscription?.billingVersion ?? 0;
     beforeRef.current = subscription ? { ...subscription } : undefined;
@@ -897,9 +922,10 @@ export function DonorDetail({ data, donorId, subscriptionId, demo, readOnly, onM
 
   const payments = data.payments.filter((payment) => payment.subscriptionId === subscription.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const events = data.auditEvents.filter((event) => event.subscriptionId === subscription.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const canEdit = !readOnly && subscription.status === "active";
-  const canCancel = !readOnly && (subscription.status === "active" || subscription.status === "past_due");
-  const canReactivate = !readOnly && (subscription.status === "cancelled" || subscription.status === "past_due");
+  const isMonthly = subscription.frequency === "monthly";
+  const canEdit = isMonthly && !readOnly && subscription.status === "active";
+  const canCancel = isMonthly && !readOnly && (subscription.status === "active" || subscription.status === "past_due");
+  const canReactivate = isMonthly && !readOnly && (subscription.status === "cancelled" || subscription.status === "past_due");
   const nextPaymentDate = getDemoNextPaymentDate(selectedDay, selectedMonth);
   const nextPaymentIsFuture = new Date(nextPaymentDate).getTime() > Date.now();
   const parsedAmount = Number(amount);
@@ -915,7 +941,7 @@ export function DonorDetail({ data, donorId, subscriptionId, demo, readOnly, onM
   async function confirmAction() {
     if (
       !actionOpen
-      || readOnly || submittingRef.current
+      || !isMonthly || readOnly || submittingRef.current
       || reason.trim().length < 5
       || (!demo && !/^\d{6}$/.test(totpCode))
       || ((actionOpen === "schedule" || actionOpen === "reactivate") && !nextPaymentIsFuture)
@@ -962,7 +988,7 @@ export function DonorDetail({ data, donorId, subscriptionId, demo, readOnly, onM
       {subscriptions.length > 1 && (
         <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-[minmax(0,1fr),auto] sm:items-end">
           <label className="block text-sm font-semibold text-slate-700">
-            Suscripción a administrar
+            Aporte seleccionado
             <select
               value={subscription.id}
               onChange={(event) => router.push(donorDetailHref(donorId, event.target.value))}
@@ -970,12 +996,12 @@ export function DonorDetail({ data, donorId, subscriptionId, demo, readOnly, onM
             >
               {subscriptions.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {subscriptionLabel(item.status)} · {item.reference} · {formatCurrencyCOP(item.amount)}
+                  {contributionLabel(item.frequency)} · {subscriptionLabel(item.status)} · {item.reference} · {formatCurrencyCOP(item.amount)}
                 </option>
               ))}
             </select>
           </label>
-          <p className="text-sm text-slate-500">{subscriptions.length} suscripciones registradas</p>
+          <p className="text-sm text-slate-500">{subscriptions.length} registros</p>
         </section>
       )}
 
@@ -983,14 +1009,14 @@ export function DonorDetail({ data, donorId, subscriptionId, demo, readOnly, onM
         <div className="space-y-6">
           <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              <div><SmallLabel>Aporte mensual</SmallLabel><p className="mt-2 text-xl font-bold tabular-nums text-slate-950">{formatCurrencyCOP(subscription.amount)}</p><button type="button" disabled={!canEdit} onClick={() => openAction("amount")} className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-foundation-blue disabled:text-slate-400"><Pencil aria-hidden="true" className="h-3 w-3" /> Cambiar siguiente cobro</button></div>
-              <div><SmallLabel>Día de cobro</SmallLabel><p className="mt-2 text-xl font-bold text-slate-950">Día {subscription.preferredPaymentDay}</p><p className="mt-1 text-xs text-slate-500">Calendario Colombia</p></div>
-              <div><SmallLabel>Próximo cobro</SmallLabel><p className="mt-2 text-lg font-bold text-slate-950">{formatDate(subscription.nextPaymentDate)}</p><p className="mt-1 text-xs text-slate-500">7:00 a. m. Colombia</p></div>
+              <div><SmallLabel>{isMonthly ? "Aporte mensual" : "Aporte único"}</SmallLabel><p className="mt-2 text-xl font-bold tabular-nums text-slate-950">{formatCurrencyCOP(subscription.amount)}</p>{isMonthly && <button type="button" disabled={!canEdit} onClick={() => openAction("amount")} className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-foundation-blue disabled:text-slate-400"><Pencil aria-hidden="true" className="h-3 w-3" /> Cambiar siguiente cobro</button>}</div>
+              <div><SmallLabel>Tipo de aporte</SmallLabel><p className="mt-2 text-xl font-bold text-slate-950">{contributionLabel(subscription.frequency)}</p>{isMonthly && <p className="mt-1 text-xs text-slate-500">Día {subscription.preferredPaymentDay} · Colombia</p>}</div>
+              <div><SmallLabel>Próximo cobro</SmallLabel><p className="mt-2 text-lg font-bold text-slate-950">{nextChargeLabel(subscription)}</p>{isMonthly && <p className="mt-1 text-xs text-slate-500">7:00 a. m. Colombia</p>}</div>
               <div><SmallLabel>Método</SmallLabel><p className="mt-2 text-lg font-bold text-slate-950">{subscription.paymentMethod}</p></div>
             </div>
           </section>
 
-          <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+          {isMonthly && <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-200 px-5 py-4"><h2 className="font-bold text-slate-950">Calendario de cobro</h2><p className="mt-1 text-sm text-slate-500">Elige el día y el mes del siguiente cobro. Guardar no genera un cargo inmediato.</p></div>
             <div className="p-5">
               <label className="mb-4 block max-w-xs text-sm font-semibold text-slate-700">Mes del próximo cobro<input type="month" value={selectedMonth} min={monthFromDate(null)} onChange={(event) => setSelectedMonth(event.target.value)} disabled={!canEdit && !canReactivate} className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-base disabled:bg-slate-100" /></label>
@@ -999,7 +1025,7 @@ export function DonorDetail({ data, donorId, subscriptionId, demo, readOnly, onM
               </div>
               <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm leading-6 text-slate-600">Nueva fecha: <span className="font-semibold text-slate-900">{formatDate(nextPaymentDate)}</span></p>{canEdit && <button type="button" onClick={() => openAction("schedule")} className="min-h-11 rounded-md bg-foundation-blue px-4 text-sm font-bold text-white">Guardar cambios</button>}</div>
             </div>
-          </section>
+          </section>}
 
           <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-200 px-5 py-4"><h2 className="font-bold text-slate-950">Pagos</h2><p className="mt-1 text-sm text-slate-500">{demo ? "Historial de intentos simulados." : "Historial de transacciones de solo lectura."}</p></div>
@@ -1088,6 +1114,9 @@ export function AdminConsole({ initialView, donorId, subscriptionId, initialData
   };
 
   const mutateSubscription = async (subscriptionId: string, version: number, mutation: AdminMutation) => {
+    if (data.subscriptions.find((item) => item.id === subscriptionId)?.frequency !== "monthly") {
+      throw new Error("El aporte unico es de solo lectura.");
+    }
     if (demo) {
       setData((current) => {
         const target = current.subscriptions.find((item) => item.id === subscriptionId);

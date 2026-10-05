@@ -4,6 +4,12 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
 
 ## Estado actual
 
+- Ajuste `0.3.1`: Mensual/Unico visibles y filtrables en el admin, incluidos
+  los aportes unicos de consulta; sin modificar datos ni tablas. Los contadores
+  recurrentes conservan su alcance mensual. Commit/push autorizados; verificar
+  publicacion y revision activa antes de declarar desplegado.
+  Reapertura manual: `docs/REOPENING_0.3.1.md`. No abrir cobros con un push:
+  las variables de Vercel y GitHub son independientes.
 - Version `0.3.0` publicada en `main` y Production, en mantenimiento/cutover.
   Los cobros permanecen deshabilitados y los tres workflows operativos pausados.
 - Migracion productiva `payment-admin-hardening-v0.3.0` aplicada y confirmada
@@ -13,12 +19,39 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
 - El respaldo FINAL previo se restauro y comparo antes de SQL; ambas copias
   privadas se conservan. Tambien hay dos copias cifradas posteriores a SQL
   (50 tablas/411 filas), consistentes entre si, todavia sin ensayo de restauracion.
-- `/admin/login` ya muestra el ingreso real, pero no se crearon cuentas ni
-  enviaron invitaciones. El titular deshabilito el registro publico en Auth y
-  se verifico el guardado. Faltan URLs, cuentas autorizadas y MFA en Production.
-- Inventario productivo de solo lectura: 37 pagos aprobados historicos requieren
-  verificar sus nuevas fechas efectivas. No son cobros fallidos ni nuevos cargos;
-  la conciliacion debe completarse antes de habilitar operaciones financieras.
+  Una nueva pareja posterior a la conciliacion contiene 50 tablas/448 filas;
+  snapshot consistente, permisos privados y hashes coincidentes, no restaurada.
+- `/admin/login` ya muestra el ingreso real. Se creo exclusivamente la primera
+  cuenta `super_admin` con invitacion de un uso, entregada en archivo local
+  privado fuera de Git; no se envio correo. El titular completo contraseña/TOTP
+  y confirmo el ingreso al panel real; lectura independiente confirma activacion
+  consumida y factor TOTP verificado. No se probaron mutaciones administrativas
+  sobre donantes reales. La segunda cuenta se preparara cuando el
+  titular lo solicite; no se programo envio ni creacion automatica.
+  El titular deshabilito el registro publico en Auth y
+  se verifico el guardado. Site URL y el callback exacto productivos tambien
+  quedaron guardados, sin comodines ni destinos Preview/localhost. Faltan
+  preparar la segunda cuenta y autorizar la reapertura financiera en Production.
+  El titular restauro Standard Protection: login accesible en el dominio
+  productivo y `/admin` sin sesion redirige al login. Pagos siguen en mantenimiento.
+- Conciliacion historica completada: 37 pagos aprobados recibieron referencia y
+  fechas efectivas verificadas mediante GET Wompi, con 37 registros canonicos
+  nuevos. Conexion independiente: originales, estados, agendas, importes y
+  fuentes tokenizadas intactos; cero nuevos cargos. Inventario posterior:
+  cero vencidas, pendientes registrados, bloqueados o errores en esa consulta.
+  La reapertura financiera autorizada sigue pendiente.
+  Tras preparar el acceso, una conexion nueva de solo lectura comparo las cinco
+  tablas operativas con el snapshot posterior a conciliacion: cero diferencias.
+- Revision posterior al primer ingreso: 11 mensuales activas con fuente/fecha
+  futura, 12 pendientes sin fuente, fecha o pago registrado, dos past_due cuyo
+  ultimo pago fue declined y una mensual cancelada. Ningun payment pending.
+  Las 27 suscripciones conservan IDs y todas sus columnas originales frente
+  al FINAL previo: cero diferencias; no se activaron registros pendientes.
+  La lista "Por revisar" incluye pendientes aunque su contador solo suma
+  past_due/recuperaciones; aclaracion visual pendiente, sin modificar datos.
+  Cuatro pendientes son registros antiguos de donantes con otra suscripcion
+  activa/pagos aprobados; ocho no tienen pago aprobado registrado en ninguna de sus
+  suscripciones. No asumir un doble cobro ni un abandono sin evidencia externa.
 - Las llaves actuales se conservaron por instruccion del titular. No se abrieron
   donaciones ni reanudaron automatismos. Evidencia y pendientes:
   `docs/CUTOVER_2026-10-04.md`.

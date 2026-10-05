@@ -62,7 +62,7 @@ export async function loadAdminData(revealDonorId?: string): Promise<AdminDemoSt
     supabase
       .from("subscriptions")
       .select("id, donor_id, amount, frequency, status, payment_method_type, preferred_payment_day, next_payment_date, reference, created_at, billing_version")
-      .eq("frequency", "monthly")
+      .in("frequency", ["monthly", "one_time"])
       .order("created_at", { ascending: false }),
     supabase
       .from("payments")
@@ -119,10 +119,12 @@ export async function loadAdminData(revealDonorId?: string): Promise<AdminDemoSt
       id: row.id,
       donorId: row.donor_id,
       amount: Number(row.amount),
-      frequency: "monthly" as const,
+      frequency: row.frequency === "one_time" ? "one_time" as const : "monthly" as const,
       status: subscriptionStatus(row.status),
-      paymentMethod: row.payment_method_type === "nequi" ? ("Nequi" as const) : ("Tarjeta tokenizada" as const),
-      preferredPaymentDay: ([1, 6, 16, 28].includes(Number(row.preferred_payment_day)) ? Number(row.preferred_payment_day) : 16) as 1 | 6 | 16 | 28,
+      paymentMethod: row.payment_method_type === "nequi" ? ("Nequi" as const)
+        : row.frequency === "one_time" ? ("Tarjeta" as const) : ("Tarjeta tokenizada" as const),
+      preferredPaymentDay: row.frequency === "one_time" ? null
+        : ([1, 6, 16, 28].includes(Number(row.preferred_payment_day)) ? Number(row.preferred_payment_day) : 16) as 1 | 6 | 16 | 28,
       nextPaymentDate: row.next_payment_date,
       reference: row.reference ?? "",
       createdAt: row.created_at,

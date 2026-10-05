@@ -15,10 +15,10 @@ export type DemoSubscription = {
   id: string;
   donorId: string;
   amount: number;
-  frequency: "monthly";
+  frequency: "monthly" | "one_time";
   status: DemoSubscriptionStatus;
-  paymentMethod: "Tarjeta tokenizada" | "Nequi";
-  preferredPaymentDay: 1 | 6 | 16 | 28;
+  paymentMethod: "Tarjeta tokenizada" | "Tarjeta" | "Nequi";
+  preferredPaymentDay: 1 | 6 | 16 | 28 | null;
   nextPaymentDate: string | null;
   reference: string;
   createdAt: string;
@@ -75,6 +75,14 @@ const DEMO_NOW = new Date("2026-08-31T12:00:00.000Z");
 
 const DEMO_STATE: AdminDemoState = {
   donors: [
+    {
+      id: "donor-unico",
+      fullName: "Sofia Demo",
+      email: "sofia.demo@example.test",
+      phone: "+57 300 000 0000",
+      city: "Bogota",
+      joinedAt: "2026-08-20T15:00:00.000Z",
+    },
     {
       id: "donor-alba",
       fullName: "Alba Restrepo",
@@ -203,8 +211,29 @@ const DEMO_STATE: AdminDemoState = {
       createdAt: "2026-07-03T19:00:00.000Z",
       billingVersion: 0,
     },
+    {
+      id: "sub-unico",
+      donorId: "donor-unico",
+      amount: 25000,
+      frequency: "one_time",
+      status: "active",
+      paymentMethod: "Tarjeta",
+      preferredPaymentDay: null,
+      nextPaymentDate: null,
+      reference: "HPE-DEMO-UNICO",
+      createdAt: "2026-08-20T15:00:00.000Z",
+      billingVersion: 0,
+    },
   ],
   payments: [
+    {
+      id: "pay-unico",
+      subscriptionId: "sub-unico",
+      amount: 25000,
+      status: "approved",
+      createdAt: "2026-08-20T15:01:00.000Z",
+      wompiTransactionId: "demo-unique-payment",
+    },
     {
       id: "pay-001",
       subscriptionId: "sub-alba",
@@ -290,7 +319,7 @@ const DEMO_STATE: AdminDemoState = {
   ],
 };
 
-export const DEMO_STORAGE_KEY = "hpe-admin-local-demo-v1";
+export const DEMO_STORAGE_KEY = "hpe-admin-local-demo-v2";
 
 export function createAdminDemoState(): AdminDemoState {
   return JSON.parse(JSON.stringify(DEMO_STATE)) as AdminDemoState;

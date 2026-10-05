@@ -49,7 +49,8 @@ function validMutation(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function serviceClient({ sourceId = "source-1", status = "active" }: { sourceId?: string | null; status?: string } = {}) {
+function serviceClient({ sourceId = "source-1", status = "active", frequency = "monthly" }: { sourceId?: string | null; status?: string; frequency?: "monthly" | "one_time" } = {}) {
+  const readSourceId = vi.fn(() => sourceId);
   const rpc = vi.fn(async (name: string, _args: Record<string, unknown>) => {
     if (name === "consume_api_rate_limit") return { data: true, error: null };
     if (name === "admin_update_subscription") {
@@ -69,12 +70,13 @@ function serviceClient({ sourceId = "source-1", status = "active" }: { sourceId?
   });
   return {
     rpc,
+    readSourceId,
     from: vi.fn(() => {
       const query = {
         select: () => query,
         eq: () => query,
         maybeSingle: vi.fn().mockResolvedValue({
-          data: sourceId ? { wompi_payment_source_id: sourceId, status, frequency: "monthly" } : null,
+          data: { get wompi_payment_source_id() { return readSourceId(); }, status, frequency },
           error: null,
         }),
       };
@@ -158,6 +160,36 @@ describe("PATCH /api/admin/subscriptions/[id]", () => {
       "p_amount", "p_preferred_payment_day", "p_next_payment_date", "p_donor_authorization_confirmed",
       "p_actor_aal", "p_actor_session_issued_at", "p_totp_verified_at",
     ].sort());
+  });
+
+  describe.each([null, "source-1"])("one_time contribution with fixture source %s", (sourceId) => {
+    it.each(["amount", "schedule", "cancel", "reactivate"])("rejects %s before reading a source or calling Wompi or the mutation RPC", async (action) => {
+      const client = serviceClient({ sourceId, frequency: "one_time", status: action === "reactivate" ? "cancelled" : "active" });
+      client.readSourceId.mockImplementation(() => { throw new Error("One-time contributions must not access a reusable source"); });
+      mocks.getServiceSupabaseClient.mockReturnValue(client);
+      vi.stubGlobal("fetch", vi.fn(() => { throw new Error("Unexpected network call in one-time fixture"); }));
+
+      try {
+        const response = await PATCH(request(validMutation({
+          action,
+          amount: action === "amount" ? 30000 : undefined,
+          preferredPaymentDay: 16,
+          nextPaymentDate: "2040-01-16T12:00:00Z",
+          donorAuthorizationConfirmed: true,
+        })), { params: Promise.resolve({ id: subscriptionId }) });
+
+        expect(response.status).toBe(409);
+        expect(await response.json()).toEqual({ message: "Esta suscripcion no admite cambios administrativos." });
+        expect(client.from).toHaveBeenCalledExactlyOnceWith("subscriptions");
+        expect(client.readSourceId).not.toHaveBeenCalled();
+        expect(mocks.isWompiPaymentSourceAvailable).not.toHaveBeenCalled();
+        expect(client.rpc).not.toHaveBeenCalledWith("admin_update_subscription", expect.anything());
+        expect(client.rpc.mock.calls.map(([name]) => name)).toEqual(["consume_api_rate_limit"]);
+        expect(fetch).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
   });
 
   it("requires donor authorization and an available tokenized source before reactivation", async () => {

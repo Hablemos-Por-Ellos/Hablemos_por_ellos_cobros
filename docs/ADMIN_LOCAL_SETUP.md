@@ -3,7 +3,14 @@
 Version 0.3.0. El procedimiento siguiente explica el laboratorio local; no
 autoriza crear cuentas reales ni habilitar cobros. Codigo y migracion SQL ya
 publicados/aplicados en Production, en mantenimiento/cutover, con registros
-originales preservados. Cuentas, MFA y conciliacion productiva aun pendientes.
+originales preservados y conciliacion historica de 37 pagos aprobados completada
+sin cargos. Primera cuenta super_admin e invitacion privada ya preparadas con
+autorizacion expresa; titular confirma primer ingreso real despues de definir
+contraseña y verificar TOTP. Activacion consumida y factor verificado tambien
+comprobados por lectura independiente. Segunda cuenta y habilitacion financiera
+todavia pendientes; no se ejercitaron mutaciones sobre donantes reales.
+El archivo de activacion queda fuera de Git y no se envio
+correo. Este documento no publica enlaces privados ni autoriza reabrir cobros.
 Auth real se ensayo en el laboratorio local con cuentas ficticias; el ensayo
 financiero Sandbox no demuestra entrega automatica del webhook ni produccion.
 Ver `docs/LOCAL_AUTH_VALIDATION.md` y `docs/VALIDATION_0.3.0_LOCAL.md`.
@@ -73,6 +80,12 @@ La Preview ficticia no usa Auth productivo ni envia enlaces a esos contactos.
 Antes de preparar las invitaciones reales, comprobar URLs exactas del dominio
 productivo para que nadie reciba un enlace de Preview. Cada titular define su
 contrasena y enrola su propio Authenticator; no hacerlo en su nombre.
+
+Comprobacion productiva posterior, 2026-10-04 Colombia: el titular guardo
+`Site URL=https://hablemos-por-ellos-cobros.vercel.app` y el unico redirect
+`https://hablemos-por-ellos-cobros.vercel.app/admin/auth/callback`. UI confirma
+Save changes deshabilitado y Total URLs: 1; sin comodines, Preview o localhost.
+Este paso no crea cuentas, no envia invitaciones ni prueba aun el primer ingreso.
 
 Condicion posterior del titular: el administrador usara el enlace al recibirlo.
 No generar/entregar su invitacion hasta completar configuracion, permisos y
