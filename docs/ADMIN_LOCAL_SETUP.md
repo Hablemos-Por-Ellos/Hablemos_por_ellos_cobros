@@ -1,9 +1,11 @@
 # Panel administrativo: preparacion local
 
-Version 0.3.0, preparacion y Preview ficticia. Este documento no autoriza aplicar
-la migracion productiva, crear cuentas reales ni habilitar cobros. Auth real se
-ensayo en el laboratorio local con cuentas ficticias; el ensayo financiero
-Sandbox paso, pero no demuestra entrega automatica del webhook ni produccion.
+Version 0.3.0. El procedimiento siguiente explica el laboratorio local; no
+autoriza crear cuentas reales ni habilitar cobros. Codigo y migracion SQL ya
+publicados/aplicados en Production, en mantenimiento/cutover, con registros
+originales preservados. Cuentas, MFA y conciliacion productiva aun pendientes.
+Auth real se ensayo en el laboratorio local con cuentas ficticias; el ensayo
+financiero Sandbox no demuestra entrega automatica del webhook ni produccion.
 Ver `docs/LOCAL_AUTH_VALIDATION.md` y `docs/VALIDATION_0.3.0_LOCAL.md`.
 
 ## 1. Variables locales
@@ -87,13 +89,16 @@ contrasena no debe desactivar MFA automaticamente. Cerrar sesion revoca el
 umbral de sesiones en la DB antes de Auth; si esa revocacion falla, se informa
 el fallo y no se afirma que los JWT anteriores hayan quedado invalidados.
 
-## 5. Publicacion futura
+## 5. Estado productivo y habilitacion pendiente
 
 Estado vigente: el usuario configuro Vercel personalmente. El asistente no guarda
-variables ni cambia protecciones. La publicacion de rama y dev fue autorizada;
-sus despliegues Preview estan en demo, sin credenciales privadas productivas.
-main permanece intacta y el corte productivo sigue pendiente. La autorizacion
-de Preview no permite habilitar cobros ni enviar invitaciones productivas.
+variables ni cambia protecciones. Rama/dev/main publicados con autorizacion;
+Preview permanece en demo sin credenciales privadas productivas. La migracion
+productiva se aplico el 2026-10-05T02:21:40.210Z tras verificar el respaldo FINAL.
+No repetir SQL por los pendientes de Auth. Registro publico aun habilitado,
+sin cuentas ni invitaciones; 37 pagos historicos necesitan fechas verificadas
+antes de abrir finanzas. Cobros deshabilitados y workflows operativos pausados.
+La autorizacion de publicacion/migracion no abre donaciones ni habilita cargos.
 Ver `docs/CUTOVER_2026-10-04.md` para evidencia y limites de las pruebas remotas.
 
 1. Completar pruebas locales/sandbox y revision independiente. Un build correcto

@@ -2,6 +2,11 @@
 
 ## 0.3.0 - 2026-10-03 - Published In Maintenance, Financial Enablement Pending
 
+- 2026-10-04: publish the scoped migration operator and verified SQL evidence
+  as fcb5689 through branch/dev/main; Production is READY with the stable domain
+  assigned. Refresh the admin setup guide to distinguish completed migration
+  from pending accounts/MFA and financial enablement. Keep all three operational
+  workflows disabled; hand off the still-enabled public signup switch to owner.
 - 2026-10-04 Colombia (2026-10-05 UTC): after the required final-backup message,
   apply the exact production migration and independently verify its marker and
   digest. Compare all 43 original tables with zero original-record differences;
