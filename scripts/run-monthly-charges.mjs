@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { runMonthlyCharges } from "./monthly-charge-runner.mjs";
+import { runMonthlyRetryCharges } from "./monthly-retry-runner.mjs";
 import { reconcileWompiReceipts } from "./wompi-receipt-runner.mjs";
 import { assertBillingJobRuntime, getBillingWompiEnvironment,
   parseBillingJobMode, logBillingJobError } from "./billing-job-mode.mjs";
@@ -51,7 +52,7 @@ function createIntegritySignature({ reference, amountInCents, currency, integrit
     .digest("hex");
 }
 
-async function createWompiTransaction({
+function transactionRequest({
   baseUrl,
   privateKey,
   acceptanceToken,
@@ -62,10 +63,8 @@ async function createWompiTransaction({
   currency,
   customerEmail,
   paymentSourceId,
-  fetchImpl,
-  onSending,
 }) {
-  const options = {
+  return {
     method: "POST",
     headers: {
       Authorization: `Bearer ${privateKey}`,
@@ -83,10 +82,14 @@ async function createWompiTransaction({
       recurrent: true,
       payment_method: { installments: 1 },
     }),
-    signal: AbortSignal.timeout(WOMPI_WRITE_TIMEOUT_MS),
   };
+}
+
+async function sendTransactionRequest({ baseUrl, options, fetchImpl, onSending }) {
   onSending?.();
-  const response = await fetchImpl(`${baseUrl}/transactions`, options);
+  const response = await fetchImpl(`${baseUrl}/transactions`, {
+    ...options, signal: AbortSignal.timeout(WOMPI_WRITE_TIMEOUT_MS),
+  });
 
   const json = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -102,38 +105,77 @@ async function createWompiTransaction({
   return { id, status };
 }
 
-async function getWompiTransaction({ baseUrl, privateKey, transactionId, fetchImpl }) {
+async function createWompiTransaction(params) {
+  return sendTransactionRequest({ ...params, options: transactionRequest(params) });
+}
+
+async function getWompiTransaction({ baseUrl, privateKey, transactionId, fetchImpl, environment }) {
   const response = await fetchImpl(`${baseUrl}/transactions/${encodeURIComponent(transactionId)}`, {
     headers: { Authorization: `Bearer ${privateKey}` },
     signal: AbortSignal.timeout(WOMPI_READ_TIMEOUT_MS),
   });
   const json = await response.json().catch(() => ({}));
   const data = json?.data;
-  if (!response.ok || !data?.id) {
+  if (!response.ok || !data?.id || String(data.id) !== String(transactionId)) {
     throw new Error("BILLING_JOB_OPERATIONAL_FAILURE");
   }
   return {
     id: String(data.id),
     status: String(data.status ?? "pending").toLowerCase(),
+    statusMessage: typeof data.status_message === "string" ? data.status_message : null,
     reference: data.reference,
     amountInCents: data.amount_in_cents,
     currency: data.currency,
     paymentSourceId: data.payment_source_id == null ? null : String(data.payment_source_id),
+    paymentMethodType: typeof data.payment_method_type === "string" ? data.payment_method_type
+      : typeof data.payment_method?.type === "string" ? data.payment_method.type : null,
     finalizedAt: typeof data.finalized_at === "string" ? data.finalized_at : null,
     createdAt: typeof data.created_at === "string" ? data.created_at : null,
     updatedAt: typeof data.updated_at === "string" ? data.updated_at : null,
+    environment,
+    verificationSource: "provider_get",
   };
+}
+
+async function getWompiPaymentSource({ baseUrl, privateKey, paymentSourceId, fetchImpl, environment, clock }) {
+  const response = await fetchImpl(`${baseUrl}/payment_sources/${encodeURIComponent(paymentSourceId)}`, {
+    headers: { Authorization: `Bearer ${privateKey}` }, signal: AbortSignal.timeout(WOMPI_READ_TIMEOUT_MS),
+  });
+  const json = await response.json().catch(() => ({}));
+  const data = json?.data;
+  if (!response.ok || data?.id == null || String(data.id) !== String(paymentSourceId)) {
+    throw new Error("BILLING_JOB_OPERATIONAL_FAILURE");
+  }
+  return { id: String(data.id), type: data.type, status: data.status,
+    environment, verificationSource: "provider_get", verifiedAt: clock().toISOString() };
+}
+
+function parseArguments(argv) {
+  if (!Array.isArray(argv)) throw new Error("BILLING_JOB_MODE_REQUIRED");
+  const schemas = argv.filter((value) => typeof value === "string" && value.startsWith("--schema="));
+  if (schemas.length > 1) throw new Error("BILLING_JOB_CONFIGURATION_INVALID");
+  const mode = parseBillingJobMode(argv.filter((value) => !schemas.includes(value)));
+  const schema = schemas[0]?.slice("--schema=".length) ?? "v040";
+  if (!["v031", "v040"].includes(schema) || (mode !== "inventory" && schema !== "v040")) {
+    throw new Error("BILLING_JOB_CONFIGURATION_INVALID");
+  }
+  return { mode, schema, explicitSchema: schemas.length === 1 };
 }
 
 export async function main({ argv = process.argv.slice(2), env = process.env,
   clientFactory = createClient, fetchImpl = globalThis.fetch, logger = console,
-  runner = runMonthlyCharges, reconcileReceipts = reconcileWompiReceipts, now = new Date() } = {}) {
-  const mode = parseBillingJobMode(argv);
+  runner, retryRunner = runMonthlyRetryCharges, reconcileReceipts = reconcileWompiReceipts,
+  now = new Date(), clock = () => new Date() } = {}) {
+  const { mode, schema: requestedSchema, explicitSchema } = parseArguments(argv);
+  let schema = requestedSchema;
+  let inventoryCompatibility = false;
   assertBillingJobRuntime(mode, env);
   const url = required("SUPABASE_URL", env);
   const key = required("SUPABASE_SERVICE_ROLE_KEY", env);
   let getTransaction;
   let createTransaction;
+  let getPaymentSource;
+  let prepareTransaction;
   if (mode !== "inventory") {
     const wompiEnv = getBillingWompiEnvironment(env);
     const baseUrl = wompiBaseUrl(wompiEnv);
@@ -145,7 +187,12 @@ export async function main({ argv = process.argv.slice(2), env = process.env,
     }
     getTransaction = ({ transactionId }) => {
       assertBillingJobRuntime("reconcile", env);
-      return getWompiTransaction({ baseUrl, privateKey, transactionId, fetchImpl });
+      return getWompiTransaction({ baseUrl, privateKey, transactionId, fetchImpl, environment: wompiEnv });
+    };
+    getPaymentSource = ({ paymentSourceId }) => {
+      assertBillingJobRuntime("reconcile", env);
+      return getWompiPaymentSource({ baseUrl, privateKey, paymentSourceId, fetchImpl,
+        environment: wompiEnv, clock });
     };
     if (mode === "charge") {
       const publicKey = wompiEnv === "prod"
@@ -187,41 +234,80 @@ export async function main({ argv = process.argv.slice(2), env = process.env,
           throw error;
         }
       };
+      prepareTransaction = async (params) => {
+        assertBillingJobRuntime("charge", env);
+        const acceptance = await getAcceptanceToken({ baseUrl, publicKey, fetchImpl });
+        assertBillingJobRuntime("charge", env);
+        const options = transactionRequest({ ...params, ...acceptance, privateKey, integritySecret });
+        let consumed = false;
+        return { send: async ({ onSending, onDispatched } = {}) => {
+          if (consumed) throw new Error("POST_DISPATCH_UNKNOWN");
+          consumed = true;
+          assertBillingJobRuntime("charge", env);
+          const created = await sendTransactionRequest({ baseUrl, options, fetchImpl, onSending });
+          try {
+            await onDispatched?.({ id: String(created.id), status: created.status });
+            return { id: String(created.id), status: created.status };
+          } catch {
+            throw new Error("POST_DISPATCH_UNKNOWN");
+          }
+        } };
+      };
     }
   }
   // Every mode, URL and production guard has passed before the client can be created.
   const supabase = clientFactory(url, key, { auth: { persistSession: false } });
-  let receipts = { received: 0, processed: 0, review: 0, failed: 0 };
+  if (mode === "inventory" && schema === "v040") {
+    let readiness;
+    try { readiness = await supabase.rpc("billing_retry_schema_ready"); }
+    catch { throw new Error("BILLING_JOB_SCHEMA_NOT_READY"); }
+    const missing = readiness?.data === false || ["PGRST202", "42883", "42P01"].includes(readiness?.error?.code);
+    if (!explicitSchema && missing) {
+      schema = "v031";
+      inventoryCompatibility = true;
+    } else if (readiness?.error || readiness?.data !== true) {
+      throw new Error("BILLING_JOB_SCHEMA_NOT_READY");
+    }
+  }
+  let receipts = { received: 0, processed: 0, review: 0, failed: 0, scopedReview: 0 };
   if (mode !== "inventory") {
     try {
-      const { data, error } = await supabase.rpc("payment_admin_schema_ready");
+      const { data, error } = await supabase.rpc("billing_retry_schema_ready");
       if (error || data !== true) throw new Error("BILLING_JOB_SCHEMA_NOT_READY");
     } catch { throw new Error("BILLING_JOB_SCHEMA_NOT_READY"); }
     // Node jobs recheck app/network policy after awaits, not only at startup.
     assertBillingJobRuntime("reconcile", env);
     try {
-      const result = await reconcileReceipts({ supabase, getTransaction, logger });
-      const fields = Object.keys(receipts);
+      const result = await reconcileReceipts({ supabase, getTransaction, getPaymentSource, logger });
+      const fields = ["received", "processed", "review", "failed"];
       if (!result || !fields.every((field) => Number.isSafeInteger(result[field]) && result[field] >= 0)
-        || result.received !== result.processed + result.review + result.failed) {
+        || result.received !== result.processed + result.review + result.failed
+        || (result.scopedReview != null && (!Number.isSafeInteger(result.scopedReview)
+          || result.scopedReview < 0 || result.scopedReview > result.review))) {
         throw new Error("BILLING_JOB_OPERATIONAL_FAILURE");
       }
-      receipts = Object.fromEntries(fields.map((field) => [field, result[field]]));
+      receipts = { ...Object.fromEntries(fields.map((field) => [field, result[field]])), scopedReview: result.scopedReview ?? 0 };
     } catch {
       receipts.failed = 1;
       logger.error("Monthly billing receipts failed code=BILLING_JOB_OPERATIONAL_FAILURE");
     }
   }
-  const chargesBlockedByReceipts = receipts.failed > 0 || receipts.review > 0;
+  // Only a verified, subscription-scoped legacy review is isolated; unknown receipts still stop sending.
+  const chargesBlockedByReceipts = receipts.failed > 0 || receipts.review > receipts.scopedReview;
   const runnerMode = mode === "charge" && chargesBlockedByReceipts ? "reconcile" : mode;
   assertBillingJobRuntime(runnerMode, env);
-  const runnerStats = await runner({ mode: runnerMode, env, now, supabase, getTransaction,
+  const selectedRunner = runner ?? (schema === "v040" ? retryRunner : runMonthlyCharges);
+  const runnerStats = await selectedRunner({ mode: runnerMode, env, now, clock, supabase, getTransaction,
+    getPaymentSource, prepareTransaction: runnerMode === "charge" ? prepareTransaction : undefined,
     createTransaction: runnerMode === "charge" ? createTransaction : undefined, logger });
-  const stats = { ...runnerStats, mode, runnerMode, receipts, chargesBlockedByReceipts,
+  const stats = { ...runnerStats, mode, schema, runnerMode, receipts, chargesBlockedByReceipts,
+    inventoryCompatibility,
+    schemaUnknown: (Number.isFinite(runnerStats.schemaUnknown) ? runnerStats.schemaUnknown : 0) + (inventoryCompatibility ? 1 : 0),
     blocked: (Number.isFinite(runnerStats.blocked) ? runnerStats.blocked : 0) + receipts.failed + receipts.review };
-  const summary = { mode, runnerMode, receipts, chargesBlockedByReceipts };
+  const summary = { mode, schema, runnerMode, receipts, chargesBlockedByReceipts, inventoryCompatibility };
   for (const field of ["due", "outstanding", "payments", "charged", "skippedPending", "reconciled",
-    "blocked", "noIds", "schemaUnknown", "failed", "duplicateCheckFailures", "auditFailures"]) {
+    "blocked", "noIds", "schemaUnknown", "failed", "duplicateCheckFailures", "auditFailures", "sent", "approved",
+    "cycles", "retryQueued", "retriesDue", "originalsReserved", "retriesReserved", "repaired"]) {
     summary[field] = Number.isFinite(stats[field]) ? stats[field] : 0;
   }
   if (mode === "inventory") {

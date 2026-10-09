@@ -7,6 +7,7 @@ import { getServiceSupabaseClient } from "@/lib/supabase-server";
 import { getWompiTransaction } from "@/lib/wompi-server";
 import { assertFinancialOperationsEnabled } from "@/lib/operation-mode";
 import { confirmedRecoverySchema } from "@/types/admin";
+import { billingRetrySchemaReady, retrySourceProof, verifiedBillingTransaction } from "@/lib/billing-v2";
 
 const recoveryCommon = {
   reason: z.string().trim().min(5).max(500),
@@ -20,7 +21,11 @@ const recoverySchema = z.object({
     ...recoveryCommon,
   }).strict();
 
-const recoveryResultSchema = confirmedRecoverySchema.shape.recovery;
+const recoveryResultSchema = confirmedRecoverySchema.shape.recovery.required({ needsReview: true });
+const recoveryReplaySchema = z.discriminatedUnion("result", [
+  z.object({ result: z.literal("new") }),
+  z.object({ result: z.literal("replay"), response: recoveryResultSchema }),
+]);
 const expectedMoneySchema = z.object({
   amount: z.union([z.number(), z.string().regex(/^\d+$/).transform(Number)])
     .pipe(z.number().int().min(1500).max(21474836)),
@@ -28,6 +33,27 @@ const expectedMoneySchema = z.object({
 });
 
 const VERIFIED_STATUSES = new Set(["approved", "pending", "declined", "error", "voided"]);
+
+function recoveryRpcError(message: string, unavailable = false) {
+  if (message.includes("ADMIN_NOT_AUTHORIZED")) {
+    return NextResponse.json({ message: "La sesion administrativa no esta autorizada." }, { status: 403 });
+  }
+  const conflict = ["RECOVERY_NOT_ALLOWED", "RECOVERY_MISMATCH", "VERSION_CONFLICT", "ADMIN_REQUEST_ID_CONFLICT",
+    "PAYMENT_RECOVERY_INVALID_INPUT", "RECOVERY_EVIDENCE_MISMATCH", "WOMPI_RESULT_IDENTITY_MISMATCH"]
+    .some((code) => message.includes(code));
+  return NextResponse.json(
+    { message: conflict ? "El intento cambio o no coincide; recarga antes de continuar." : "No se pudo aplicar la conciliacion." },
+    { status: conflict ? 409 : unavailable || message.includes("SCHEMA_REQUIRED") ? 503 : 500 }
+  );
+}
+
+function confirmedRecoveryResponse(value: unknown, attemptId: string, transactionId: string) {
+  const result = recoveryResultSchema.safeParse(value);
+  if (!result.success || result.data.attemptId !== attemptId || result.data.transactionId !== transactionId) {
+    return NextResponse.json({ message: "La base de datos devolvio una conciliacion invalida." }, { status: 500 });
+  }
+  return NextResponse.json({ recovery: result.data, needsReview: result.data.needsReview });
+}
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!isSameOriginRequest(request)) {
@@ -56,6 +82,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const serviceClient = getServiceSupabaseClient();
   if (!serviceClient) return NextResponse.json({ message: "Servicio de datos no configurado." }, { status: 503 });
+  if (!(await billingRetrySchemaReady(serviceClient))) return NextResponse.json({ message: "Esquema de cobros en preparacion." }, { status: 503 });
 
   const { data: rateAllowed, error: rateError } = await serviceClient.rpc("consume_api_rate_limit", {
     p_scope: "admin_payment_recovery",
@@ -70,9 +97,39 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   const totpVerifiedAt = new Date().toISOString();
 
+  const replayAdmin = await getAdminContext();
+  if (!replayAdmin || replayAdmin.demo || replayAdmin.userId !== admin.userId) {
+    return NextResponse.json({ message: "La sesion administrativa cambio o fue revocada." }, { status: 403 });
+  }
+  try { assertFinancialOperationsEnabled(); } catch {
+    return NextResponse.json({ message: "Operaciones financieras deshabilitadas." }, { status: 503 });
+  }
+  // Durable replay depends only on authenticated user input, never current provider/state evidence.
+  try {
+    const { data, error } = await serviceClient.rpc("billing_v2_admin_recovery_replay", {
+      p_attempt_id: attemptId,
+      p_actor_user_id: admin.userId,
+      p_reason: input.reason,
+      p_request_id: input.requestId,
+      p_transaction_id: input.transactionId,
+      p_expected_version: input.expectedVersion,
+      p_actor_aal: replayAdmin.aal,
+      p_actor_session_issued_at: replayAdmin.sessionIssuedAt,
+      p_totp_verified_at: totpVerifiedAt,
+    });
+    if (error) return recoveryRpcError(error.message, true);
+    const replay = recoveryReplaySchema.safeParse(data);
+    if (!replay.success) return NextResponse.json({ message: "La base de datos devolvio un replay invalido." }, { status: 500 });
+    if (replay.data.result === "replay") {
+      return confirmedRecoveryResponse(replay.data.response, attemptId, input.transactionId);
+    }
+  } catch {
+    return NextResponse.json({ message: "No fue posible verificar el replay administrativo." }, { status: 503 });
+  }
+
   const { data: attempt, error: attemptError } = await serviceClient
     .from("payment_attempts")
-    .select("id, subscription_id, reference, amount, currency, state, wompi_transaction_id")
+    .select("id, subscription_id, reference, amount, currency, state, wompi_transaction_id, attempt_number, dispatch_snapshot")
     .eq("id", attemptId)
     .maybeSingle();
   if (attemptError) return NextResponse.json({ message: "No fue posible consultar el intento." }, { status: 503 });
@@ -120,9 +177,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   ))) {
     return NextResponse.json({ message: "La identidad del pago historico es ambigua o no coincide con el intento." }, { status: 409 });
   }
-  const expectedMoney = expectedMoneySchema.safeParse(historicalPayment ?? attempt);
-  if (!expectedMoney.success) {
+  const isV2Attempt = attempt.attempt_number !== null && attempt.attempt_number !== undefined;
+  const historicalMoney = historicalPayment ? expectedMoneySchema.safeParse(historicalPayment) : null;
+  const expectedMoney = expectedMoneySchema.safeParse(isV2Attempt ? attempt : historicalPayment ?? attempt);
+  if (!expectedMoney.success || (historicalMoney && (!historicalMoney.success || (isV2Attempt && (
+    historicalMoney.data.amount !== expectedMoney.data.amount || historicalMoney.data.currency !== expectedMoney.data.currency
+  ))))) {
     return NextResponse.json({ message: "El importe o la moneda esperados no son validos para conciliar." }, { status: 409 });
+  }
+  if (!isV2Attempt && historicalPayment && expectedMoney.data.amount !== Number(attempt.amount)
+    && historicalPayment.reference !== attempt.reference) {
+    return NextResponse.json({ message: "La referencia del pago historico no coincide con el intento." }, { status: 409 });
+  }
+  const frozenSourceId = z.string().min(1).safeParse(attempt.dispatch_snapshot?.paymentSourceId);
+  const expectedSourceId = isV2Attempt ? frozenSourceId.success ? frozenSourceId.data : null : subscription.wompi_payment_source_id;
+  if (isV2Attempt && subscription.frequency === "monthly" && !expectedSourceId) {
+    return NextResponse.json({ message: "La fuente congelada del intento no es valida." }, { status: 409 });
   }
 
   try {
@@ -138,28 +208,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ message: "La transaccion de Wompi no coincide con el intento seleccionado." }, { status: 409 });
     }
     if (
-      subscription.frequency === "monthly"
-      && (!subscription.wompi_payment_source_id || transaction.paymentSourceId !== subscription.wompi_payment_source_id)
+      (subscription.frequency === "monthly" || (isV2Attempt && expectedSourceId !== null))
+      && (!expectedSourceId || transaction.paymentSourceId !== expectedSourceId)
     ) {
       return NextResponse.json({ message: "La fuente tokenizada de Wompi no coincide con la suscripcion." }, { status: 409 });
     }
 
     const finalized = transaction.finalizedAt ? new Date(transaction.finalizedAt) : null;
     const effectiveAt = finalized && Number.isFinite(finalized.getTime()) ? finalized : null;
-    const preferredDay = [1, 6, 16, 28].includes(Number(subscription.preferred_payment_day))
-      ? Number(subscription.preferred_payment_day)
+    const storedDay = isV2Attempt ? attempt.dispatch_snapshot?.preferredPaymentDay : subscription.preferred_payment_day;
+    const preferredDay = [1, 6, 16, 28].includes(Number(storedDay))
+      ? Number(storedDay)
       : null;
     const candidateNextPayment = effectiveAt ? getNextMonthlyPaymentDate(effectiveAt, preferredDay) : null;
     const sanitized = {
+      ...verifiedBillingTransaction(transaction),
+      payment_source_verification: await retrySourceProof(transaction),
       source: "admin_recovery",
-      transaction: {
-        id: transaction.id,
-        status,
-        reference: transaction.reference,
-        amount_in_cents: transaction.amountInCents,
-        currency: transaction.currency,
-        finalized_at: transaction.finalizedAt ?? null,
-      },
+      transaction: verifiedBillingTransaction(transaction),
       verified_at: new Date().toISOString(),
     };
 
@@ -170,7 +236,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     try { assertFinancialOperationsEnabled(); } catch {
       return NextResponse.json({ message: "Operaciones financieras deshabilitadas." }, { status: 503 });
     }
-    const { data, error } = await serviceClient.rpc("admin_reconcile_payment_attempt", {
+    const { data, error } = await serviceClient.rpc("billing_v2_admin_reconcile_payment_attempt", {
       p_attempt_id: attemptId,
       p_actor_user_id: admin.userId,
       p_actor_aal: currentAdmin.aal,
@@ -189,19 +255,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       p_candidate_next_payment: candidateNextPayment?.toISOString() ?? null,
       p_raw: sanitized,
     });
-    if (error) {
-      const conflict = error.message.includes("RECOVERY_NOT_ALLOWED") || error.message.includes("RECOVERY_MISMATCH") || error.message.includes("VERSION_CONFLICT");
-      return NextResponse.json(
-        { message: conflict ? "El intento cambio o no coincide; recarga antes de continuar." : "No se pudo aplicar la conciliacion." },
-        { status: conflict ? 409 : 500 }
-      );
-    }
-    const result = recoveryResultSchema.safeParse(data);
-    if (!result.success || result.data.attemptId !== attemptId || result.data.transactionId !== transaction.id
-      || (status === "approved" && !effectiveAt && !["review", "duplicate"].includes(result.data.result))) {
-      return NextResponse.json({ message: "La base de datos devolvio una conciliacion invalida." }, { status: 500 });
-    }
-    return NextResponse.json({ recovery: result.data, needsReview: result.data.result === "review" || (status === "approved" && !effectiveAt) });
+    if (error) return recoveryRpcError(error.message);
+    return confirmedRecoveryResponse(data, attemptId, input.transactionId);
   } catch (error) {
     console.error("admin_payment_recovery_verification_failed", {
       attemptId,

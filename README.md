@@ -4,6 +4,21 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
 
 ## Estado actual
 
+- Candidato **0.4.0 en preparacion de corte**, rama `codex/monthly-payment-retry`: admin
+  compacto y un adicional por ciclo tras fondos insuficientes verificados.
+  Version/lock preparados; todavia sin push, deploy ni SQL productivo 0.4.0.
+  El titular autorizo terminar el corte productivo el 8 de octubre. Preflight
+  PostgreSQL de solo lectura correcto; GitHub Monthly Charges y Repository
+  Activity pausados, controles cutover/false y sin ejecuciones pendientes.
+  Configuracion/mantenimiento de Vercel por comprobar con el titular; no se
+  habilitan cobros por publicar. La nueva migracion sigue condicionada al
+  respaldo FINAL restaurado/comparado y a su confirmacion inmediata antes de SQL.
+  Alcance, contratos y parada obligatoria: `docs/BILLING_RETRY_0.4.0.md`.
+  Evidencia local y limites: `docs/VALIDATION_0.4.0.md`; QA local aprobada
+  con alcance limitado tras reproduccion independiente en aislamiento OS.
+  Corte exacto y recuperacion: `docs/CUTOVER_0.4.0.md`; riesgos residuales de
+  dependencias: `docs/DEPENDENCIES_0.4.0.md`.
+  Estado/evidencia de corte: `docs/CUTOVER_0.4.0.md`. Aun no desplegado ni migrado.
 - Ajuste `0.3.1`: Mensual/Unico visibles y filtrables en el admin, incluidos
   los aportes unicos de consulta; sin modificar datos ni tablas. Los contadores
   recurrentes conservan su alcance mensual. Codigo f45b007 publicado por
@@ -11,8 +26,13 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
   0.3.1 y los filtros reales. Validacion: `docs/VALIDATION_0.3.1.md`.
   Reapertura manual: `docs/REOPENING_0.3.1.md`. No abrir cobros con un push:
   las variables de Vercel y GitHub son independientes.
-- Version `0.3.1` publicada en `main` y Production, en mantenimiento/cutover.
-  Los cobros permanecen deshabilitados y los tres workflows operativos pausados.
+- Version `0.3.1` publicada en `main` y Production. El titular reabrio el portal
+  y reanudo los workflows el 5 de octubre; reapertura e inventory comprobados.
+  Verificacion de lectura del 7 de octubre: el job automatico del dia 6 creo un
+  cobro, aprobado tambien en Wompi y registrado en Supabase, con siguiente fecha
+  el 6 de noviembre. El job del 7 no repitio el cargo. Sin duplicados ni intentos
+  sin resolver en esa observacion; no garantiza resultados de cobros futuros.
+  El job del 6 arranco cerca de las 13:00 Colombia, despues del cron de las 07:00.
 - Migracion productiva `payment-admin-hardening-v0.3.0` aplicada y confirmada
   el `2026-10-05T02:21:40.210Z` (4 de octubre en Colombia). Una conexion nueva
   comparo las 43 tablas originales: cero diferencias en los registros originales.
@@ -22,25 +42,29 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
   (50 tablas/411 filas), consistentes entre si, todavia sin ensayo de restauracion.
   Una nueva pareja posterior a la conciliacion contiene 50 tablas/448 filas;
   snapshot consistente, permisos privados y hashes coincidentes, no restaurada.
-- `/admin/login` ya muestra el ingreso real. Se creo exclusivamente la primera
+- `/admin/login` ya muestra el ingreso real. Se creo la primera
   cuenta `super_admin` con invitacion de un uso, entregada en archivo local
   privado fuera de Git; no se envio correo. El titular completo contraseña/TOTP
   y confirmo el ingreso al panel real; lectura independiente confirma activacion
   consumida y factor TOTP verificado. No se probaron mutaciones administrativas
-  sobre donantes reales. La segunda cuenta se preparara cuando el
-  titular lo solicite; no se programo envio ni creacion automatica.
+  sobre donantes reales. El 8 de octubre, con autorizacion del titular, se creo
+  la segunda cuenta con rol `admin` y una invitacion privada de un uso/vigencia
+  inferior a una hora. Entrega en archivo privado fuera de Git, sin correo
+  automatico. El titular confirmo su primer ingreso el mismo dia; lectura
+  independiente verifica contraseña definida, un factor TOTP verificado,
+  invitacion consumida y una sesion aal2. No se leyeron secretos ni se probaron
+  mutaciones sobre donantes reales para comprobar el acceso.
   El titular deshabilito el registro publico en Auth y
   se verifico el guardado. Site URL y el callback exacto productivos tambien
-  quedaron guardados, sin comodines ni destinos Preview/localhost. Faltan
-  preparar la segunda cuenta y autorizar la reapertura financiera en Production.
+  quedaron guardados, sin comodines ni destinos Preview/localhost.
   El titular restauro Standard Protection: login accesible en el dominio
-  productivo y `/admin` sin sesion redirige al login. Pagos siguen en mantenimiento.
+  productivo y `/admin` sin sesion redirige al login.
 - Conciliacion historica completada: 37 pagos aprobados recibieron referencia y
   fechas efectivas verificadas mediante GET Wompi, con 37 registros canonicos
   nuevos. Conexion independiente: originales, estados, agendas, importes y
   fuentes tokenizadas intactos; cero nuevos cargos. Inventario posterior:
   cero vencidas, pendientes registrados, bloqueados o errores en esa consulta.
-  La reapertura financiera autorizada sigue pendiente.
+  La reapertura posterior se verifico el 5 de octubre.
   Tras preparar el acceso, una conexion nueva de solo lectura comparo las cinco
   tablas operativas con el snapshot posterior a conciliacion: cero diferencias.
 - Revision posterior al primer ingreso: 11 mensuales activas con fuente/fecha
@@ -53,8 +77,9 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
   Cuatro pendientes son registros antiguos de donantes con otra suscripcion
   activa/pagos aprobados; ocho no tienen pago aprobado registrado en ninguna de sus
   suscripciones. No asumir un doble cobro ni un abandono sin evidencia externa.
-- Las llaves actuales se conservaron por instruccion del titular. No se abrieron
-  donaciones ni reanudaron automatismos. Evidencia y pendientes:
+- Las llaves actuales se conservaron por instruccion del titular. La preparacion
+  del acceso secundario no modifico codigo, proveedores, controles financieros
+  ni tablas operativas; comparacion anterior/posterior sin diferencias. Evidencia:
   `docs/CUTOVER_2026-10-04.md`.
 
 ## Historial De Preparacion

@@ -17,7 +17,11 @@ for (const name of ['NEXT_PUBLIC_WOMPI_PUBLIC_KEY','WOMPI_PRIVATE_KEY','WOMPI_IN
   for (const suffix of ['', '_PROD','_SANDBOX']) env[`${name}${suffix}`] = '';
 }
 const args = [path.resolve('node_modules/next/dist/bin/next'),operation];
-if (operation === 'dev') args.push('--hostname','127.0.0.1','--port','3000');
+if (operation === 'dev') {
+  const port = process.env.HPE_DEMO_PORT || '3000';
+  if (!/^\d+$/.test(port) || Number(port) < 1024 || Number(port) > 65535) throw new Error('INVALID_LOCAL_DEMO_PORT');
+  args.push('--hostname','127.0.0.1','--port',port);
+}
 const child = spawn(process.execPath,args,{ env,windowsHide: true,stdio: 'inherit' });
 process.on('SIGINT',() => child.kill('SIGINT'));
 process.on('SIGTERM',() => child.kill('SIGTERM'));

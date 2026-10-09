@@ -38,7 +38,7 @@ jobs:
           cache: npm
 
       - name: Install deps
-        run: npm ci
+        run: npm ci --omit=dev
 
       - name: Run monthly charges
         run: npm run monthly-charges -- --mode=${{ github.event_name == 'schedule' && 'charge' || inputs.mode || 'inventory' }}

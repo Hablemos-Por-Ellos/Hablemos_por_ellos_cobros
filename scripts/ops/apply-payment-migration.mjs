@@ -5,10 +5,13 @@ import { pathToFileURL } from "node:url";
 import { decryptBackupBuffer, fileSha256 } from "./backup-crypto.mjs";
 import { compareManifests, databaseManifest, MANIFEST_METADATA_SECTIONS, quoteIdentifier } from "./database-manifest.mjs";
 import { assertExpectedProductionProject, connectionFingerprint, parseArguments, postgresClient, privateConfig } from "./private-config.mjs";
-import { closeMigrationConnection, migrationWriterIdentity, observePaymentMigration, PAYMENT_MIGRATION } from "./migration-recovery.mjs";
+import { closeMigrationConnection, migrationWriterIdentity, observePaymentMigration, migrationPreservationManifest, PAYMENT_MIGRATION } from "./migration-recovery.mjs";
 
 // v0.3.0 | 2026-10-04. Verify the final backup under the same locks as the migration.
-const MIGRATION = PAYMENT_MIGRATION;
+export const PAYMENT_MIGRATION_SPEC = Object.freeze({ name: PAYMENT_MIGRATION,
+  sql: "supabase/migrations/202609190001_payment_and_admin_hardening.sql",
+  preflight: "supabase/preflight/payment_admin_preflight.sql",
+  postflight: "supabase/postflight/payment_admin_postflight.sql", lock: "payment_admin_hardening_v0.3.0" });
 const MIGRATION_TABLES = ["donors", "subscriptions", "payments", "webhook_events", "audit_logs",
   "admin_users", "admin_invitations", "admin_audit_logs", "checkout_intents", "payment_attempts",
   "api_rate_limits", "payment_admin_migrations"];
@@ -52,13 +55,13 @@ export function assertCompleteMigrationManifest(manifest) {
   }
 }
 
-export async function lockMigrationTables(client) {
+export async function lockMigrationTables(client, tables = MIGRATION_TABLES) {
   const { rows } = await client.query(`select n.nspname as schema,c.relname as name
     from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
     where c.relkind in ('r','p') and n.nspname='public' and c.relname=any($1::text[])
-    order by n.nspname,c.relname`, [MIGRATION_TABLES]);
+    order by n.nspname,c.relname`, [tables]);
   if (!rows.length) throw new Error("MIGRATION_TABLE_INVENTORY_REQUIRED");
-  if (rows.some(({ schema, name }) => schema !== "public" || !MIGRATION_TABLES.includes(name))) {
+  if (rows.some(({ schema, name }) => schema !== "public" || !tables.includes(name))) {
     throw new Error("MIGRATION_TABLE_INVENTORY_OUTSIDE_SCOPE");
   }
   // Provider-managed schemas remain fully compared, but this migration never writes them.
@@ -66,27 +69,31 @@ export async function lockMigrationTables(client) {
   await client.query(`LOCK TABLE ${qualified.join(",")} IN ACCESS EXCLUSIVE MODE`);
 }
 
-export async function applyPaymentMigration(args, { loadConfig = privateConfig, createClient = postgresClient,
+export async function applyVersionedPaymentMigration(args, { loadConfig = privateConfig, createClient = postgresClient,
   readFile = fs.promises.readFile.bind(fs.promises), readManifest = databaseManifest,
-  readBackup = verifiedMigrationBackup, report = console } = {}) {
+  readBackup = verifiedMigrationBackup, report = console, migration = PAYMENT_MIGRATION_SPEC } = {}) {
   if (!["local", "production"].includes(args.target)) throw new Error("EXPLICIT_MIGRATION_TARGET_REQUIRED");
+  if (args.target === "production" && (args['cutover-authorized'] !== "yes"
+    || args['backup-confirmed-in-chat'] !== "yes" || !args.backup)) {
+    throw new Error("PRODUCTION_REQUIRES_CUTOVER_AUTHORIZATION_AND_CHAT_BACKUP_CONFIRMATION");
+  }
   const { config, url, passphrase } = loadConfig(args.env);
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
   if ((args.target === "local") !== local) throw new Error("MIGRATION_TARGET_MISMATCH");
   let manifest;
-  if (!local) {
-    assertExpectedProductionProject(url, config);
-    if (args['cutover-authorized'] !== "yes" || args['backup-confirmed-in-chat'] !== "yes" || !args.backup) {
+  if (!local || args.backup) {
+    if (!local) assertExpectedProductionProject(url, config);
+    if (!local && (args['cutover-authorized'] !== "yes" || args['backup-confirmed-in-chat'] !== "yes" || !args.backup)) {
       throw new Error("PRODUCTION_REQUIRES_CUTOVER_AUTHORIZATION_AND_CHAT_BACKUP_CONFIRMATION");
     }
     manifest = await readBackup(args, url, passphrase);
     assertCompleteMigrationManifest(manifest);
   }
-  const sql = await readFile(path.resolve("supabase/migrations/202609190001_payment_and_admin_hardening.sql"), "utf8");
+  const sql = await readFile(path.resolve(migration.sql), "utf8");
   const digest = crypto.createHash("sha256").update(sql).digest("hex");
   const body = migrationTransactionBody(sql);
-  const preflight = migrationTransactionBody(await readFile("supabase/preflight/payment_admin_preflight.sql", "utf8"));
-  const postflight = migrationTransactionBody(await readFile("supabase/postflight/payment_admin_postflight.sql", "utf8"));
+  const preflight = migrationTransactionBody(await readFile(migration.preflight, "utf8"));
+  const postflight = migrationTransactionBody(await readFile(migration.postflight, "utf8"));
   const clientOptions = { caFile: config.DATABASE_CA_CERT || ".env.backup-ca.local", labContainer: args['lab-container'] };
   const client = createClient(url, { ...clientOptions, readOnly: false });
   let writerIdentity;
@@ -108,10 +115,10 @@ export async function applyPaymentMigration(args, { loadConfig = privateConfig, 
     await client.query("SET LOCAL statement_timeout='120s'");
     const { rows: [settings] } = await client.query("SHOW search_path");
     if (typeof settings?.search_path !== "string" || !settings.search_path) throw new Error("MIGRATION_SEARCH_PATH_REQUIRED");
-    await client.query("select pg_advisory_xact_lock(hashtextextended('payment_admin_hardening_v0.3.0',0))");
+    await client.query("select pg_advisory_xact_lock(hashtextextended($1,0))", [migration.lock]);
     if (manifest) {
       failurePhase = "application_table_locks";
-      await lockMigrationTables(client);
+      await lockMigrationTables(client, migration.name === PAYMENT_MIGRATION ? MIGRATION_TABLES : [...MIGRATION_TABLES, "billing_cycles"]);
       failurePhase = "source_comparison";
       const before = await readManifest(client);
       if (compareManifests(manifest, before, { allowAdditionalReceipts: true, compareMetadata: true,
@@ -122,15 +129,16 @@ export async function applyPaymentMigration(args, { loadConfig = privateConfig, 
     failurePhase = "preflight";
     await client.query(preflight);
     await client.query("select set_config('app.migration_digest',$1,true)", [digest]);
+    if (migration.digestSetting) await client.query("select set_config($1,$2,true)", [migration.digestSetting, digest]);
     failurePhase = "migration";
     await client.query({ text: body, query_timeout: 300000 });
-    const marker = await client.query("select digest from public.payment_admin_migrations where name=$1", [MIGRATION]);
+    const marker = await client.query("select digest from public.payment_admin_migrations where name=$1", [migration.name]);
     if (marker.rows[0]?.digest !== digest) throw new Error("MIGRATION_MARKER_MISMATCH");
     failurePhase = "postflight";
     await client.query(postflight);
     if (protectedManifest) {
       failurePhase = "preservation_comparison";
-      const after = await readManifest(client, { original: protectedManifest });
+      const after = migrationPreservationManifest(protectedManifest, await readManifest(client, { original: protectedManifest }), migration.name);
       if (compareManifests(protectedManifest, after).length) throw new Error("PRECOMMIT_PRESERVATION_FAILED_KEEP_CUTOVER");
     }
     failurePhase = "commit";
@@ -144,6 +152,7 @@ export async function applyPaymentMigration(args, { loadConfig = privateConfig, 
       createObserver: () => createClient(url, { ...clientOptions, readOnly: true }),
       failedClient: client, writerIdentity, expectedDatabase: decodeURIComponent(url.pathname.slice(1)),
       digest, originalManifest: protectedManifest,
+      migration: migration.name,
     });
     const sqlState = /^[0-9A-Z]{5}$/.test(error?.code ?? "") ? error.code : undefined;
     report.error(JSON.stringify({ operation: "migration_stopped", verified: false, failurePhase,
@@ -154,6 +163,10 @@ export async function applyPaymentMigration(args, { loadConfig = privateConfig, 
     await closeMigrationConnection(client);
     client.removeListener?.("error", ignoreConnectionError);
   }
+}
+
+export async function applyPaymentMigration(args, dependencies = {}) {
+  return applyVersionedPaymentMigration(args, { ...dependencies, migration: PAYMENT_MIGRATION_SPEC });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

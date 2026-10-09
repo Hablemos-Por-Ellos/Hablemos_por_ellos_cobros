@@ -244,11 +244,11 @@ test('CLI durable receipt retry carries verified historical amount/reference/dat
     amountInCents: 1000000, currency: 'COP', status: 'approved', finalizedAt: null, paymentSourceId: 'fixture-legacy-source' }));
   const logger = { error: vi.fn() };
   assert.deepEqual(await reconcileWompiReceipts({ supabase,getTransaction,logger }),
-    { received: 1, processed: 0, review: 1, failed: 0 });
+    { received: 1, processed: 0, review: 1, failed: 0, scopedReview: 0 });
   getTransaction.mockResolvedValue({ id: 'tx-historic-10000', reference: 'HPE-LEGACY',
     amountInCents: 1000000, currency: 'COP', status: 'approved', finalizedAt: '2026-09-19T15:00:00Z', paymentSourceId: 'fixture-legacy-source' });
   assert.deepEqual(await reconcileWompiReceipts({ supabase,getTransaction,logger }),
-    { received: 1, processed: 1, review: 0, failed: 0 });
+    { received: 1, processed: 1, review: 0, failed: 0, scopedReview: 0 });
   const params = supabase.rpc.mock.calls[1][1];
   assert.equal(params.p_transaction_id,'tx-historic-10000');
   assert.equal(params.p_reference,'HPE-LEGACY');
@@ -304,12 +304,12 @@ test('CLI handles terminal GET with NULL finalized date and old PENDING receipt,
     const getTransaction = vi.fn(async () => ({ id: tx,reference: 'HPE-LEGACY',amountInCents: 1000000,currency: 'COP',
       status,finalizedAt: null,paymentSourceId: 'fixture-legacy-source' }));
     const logger = { error: vi.fn() };
-    const resolved = { received: 1,processed: 1,review: 0,failed: 0 };
+    const resolved = { received: 1,processed: 1,review: 0,failed: 0,scopedReview: 0 };
     assert.deepEqual(await reconcileWompiReceipts({ supabase,getTransaction,logger }),resolved);
     row.processing_state = 'needs_review';
     assert.deepEqual(await reconcileWompiReceipts({ supabase,getTransaction,logger }),resolved);
     assert.equal(supabase.rpc.mock.calls[0][1].p_event_key,supabase.rpc.mock.calls[1][1].p_event_key);
-    assert.deepEqual(await reconcileWompiReceipts({ supabase,getTransaction,logger }),{ received: 0,processed: 0,review: 0,failed: 0 });
+    assert.deepEqual(await reconcileWompiReceipts({ supabase,getTransaction,logger }),{ received: 0,processed: 0,review: 0,failed: 0,scopedReview: 0 });
     assert.equal(JSON.stringify(row.raw),raw);
     assert.equal(payment.billing_review_required,false);
     assert.equal(payment.approved_at,null);

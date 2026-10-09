@@ -93,7 +93,7 @@ function selectSubscriptionStatus(value: DemoSubscriptionStatus | "all") {
 }
 
 function searchSubscriptions(value: string) {
-  fireEvent.change(screen.getByPlaceholderText("Buscar por donante, correo o referencia"), { target: { value } });
+  fireEvent.change(screen.getByPlaceholderText("Buscar donante o referencia"), { target: { value } });
 }
 
 function expectSubscriptions(expected: DemoSubscription[]) {
@@ -101,27 +101,28 @@ function expectSubscriptions(expected: DemoSubscription[]) {
   const table = main.getByRole("table", { hidden: true });
   const rows = within(table).getAllByRole("row", { hidden: true }).slice(1);
   // jsdom keeps both responsive branches mounted; scope them independently.
-  const mobileLinks = main.queryAllByRole("link", { hidden: true }).filter((link) => !table.contains(link));
+  const mobileLinks = main.queryAllByTestId("mobile-subscription-row");
   expect(rows).toHaveLength(expected.length);
   expect(mobileLinks.map((link) => link.getAttribute("href"))).toEqual(expected.map(detailHref));
   expected.forEach((subscription, index) => {
     const row = within(rows[index]);
     const cells = row.getAllByRole("cell", { hidden: true });
-    expect(row.getByText(subscription.reference, { exact: true })).toBeInTheDocument();
+    expect(within(cells[0]).getByRole("button", { name: /^Abrir resumen de/, hidden: true })).toHaveTextContent(subscription.reference);
     expect(cells[2]).toHaveTextContent(frequencyLabels[subscription.frequency]);
     expect(cells[3]).toHaveTextContent(statusLabels[subscription.status]);
     expect(row.getByRole("link", { name: /^Ver detalle de/, hidden: true })).toHaveAttribute("href", detailHref(subscription));
     const mobile = within(mobileLinks[index]);
-    expect(mobile.getByText(`${subscription.reference} \u00b7 ${frequencyLabels[subscription.frequency]}`, { exact: true })).toBeInTheDocument();
+    expect(mobileLinks[index]).toHaveTextContent(subscription.reference);
+    expect(mobileLinks[index]).toHaveTextContent(frequencyLabels[subscription.frequency]);
     expect(mobile.getByText(statusLabels[subscription.status], { exact: true })).toBeInTheDocument();
     if (subscription.frequency === "one_time") {
       expect(cells[4]).toHaveTextContent("No aplica");
-      expect(mobile.getByText("No aplica", { exact: true })).toBeInTheDocument();
+      expect(mobileLinks[index]).toHaveTextContent("No aplica");
       expect(cells[4]).not.toHaveTextContent(/2099|D\u00eda/);
       expect(mobile.queryByText(/^D\u00eda /)).not.toBeInTheDocument();
     } else {
       expect(cells[4]).toHaveTextContent(`D\u00eda ${subscription.preferredPaymentDay}`);
-      expect(mobile.getByText(`D\u00eda ${subscription.preferredPaymentDay}`, { exact: true })).toBeInTheDocument();
+      expect(mobileLinks[index]).toHaveTextContent(`D\u00eda ${subscription.preferredPaymentDay}`);
     }
   });
 }
@@ -297,8 +298,9 @@ describe("monthly-only dashboard counters and review queue", () => {
     const single = data.subscriptions.find((item) => item.frequency === "one_time")!;
     single.status = status;
     showConsole("dashboard", data);
-    expectMonthlyMetrics(3, 1, 2);
-    const expected = data.subscriptions.filter((item) => item.frequency === "monthly" && (item.status === "past_due" || item.status === "pending"));
+    // The scheduled additional has its own queue; uncertain results remain review cases.
+    expectMonthlyMetrics(3, 1, 3);
+    const expected = data.subscriptions.filter((item) => ["sub-elena", "sub-julian", "sub-security"].includes(item.id));
     expect(reviewLinks().map((link) => link.getAttribute("href"))).toEqual(expected.map(detailHref));
     expect(reviewLinks().map((link) => link.getAttribute("href"))).not.toContain(detailHref(single));
     expect(screen.queryByText("Sofia Demo", { exact: true })).not.toBeInTheDocument();

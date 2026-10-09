@@ -5,6 +5,7 @@ import { getWompiEventsSecret, WOMPI_ENV } from "@/lib/wompi";
 import { getNextMonthlyPaymentDate } from "@/lib/payment-dates";
 import { getAppOperationMode } from "@/lib/operation-mode";
 import { paymentSchemaReady } from "@/lib/payment-schema";
+import { applyBillingResult, billingRetrySchemaReady } from "@/lib/billing-v2";
 import { makeWompiReceipt } from "@/lib/wompi-receipts";
 import { getWompiTransaction, type WompiTransactionResult } from "@/lib/wompi-server";
 import {
@@ -94,6 +95,20 @@ export async function POST(request: Request) {
       assertCompleteVerifiedTransaction(verified, eventTransaction.id);
     } catch {
       return NextResponse.json({ message: "Transaccion incompleta en Wompi" }, { status: 502 });
+    }
+
+    if (await billingRetrySchemaReady(supabase)) {
+      const { data: attempt, error: lookupError } = await supabase.from("payment_attempts")
+        .select("id,cycle_id,attempt_number").eq("reference", verified.reference).maybeSingle();
+      if (lookupError) return NextResponse.json({ message: "No se pudo conciliar el intento" }, { status: 503 });
+      if (attempt && [1, 2].includes(attempt.attempt_number)) {
+        const result = await applyBillingResult(supabase, attempt.id, verified);
+        const { error: receiptMarkError } = await supabase.rpc("mark_wompi_receipt", {
+          p_raw: { receipt_id: receiptId }, p_result: result.result, p_error: null,
+        });
+        if (receiptMarkError) return NextResponse.json({ message: "Evento aplicado; recibo pendiente de conciliar" }, { status: 503 });
+        return NextResponse.json({ message: "Evento procesado", result: result.result });
+      }
     }
 
     const applyVerifiedTransaction = async (

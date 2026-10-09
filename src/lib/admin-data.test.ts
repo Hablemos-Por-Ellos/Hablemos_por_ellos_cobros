@@ -4,7 +4,8 @@ vi.mock("@/lib/admin-auth", () => ({ getAdminContext: mocks.context, isAdminDemo
 vi.mock("@/lib/supabase-auth-server", () => ({ getServerAuthSupabaseClient: mocks.client }));
 import { loadAdminData } from "./admin-data";
 
-function readClient(rows: Record<string, unknown[]>) {
+type Row = Record<string, unknown>;
+function readClient(rows: Record<string, unknown[]>, pageError?: { table: string; start: number }) {
   const forbiddenWrite = () => { throw new Error("Unexpected write in admin read-only fixture"); };
   const mutations = {
     insert: vi.fn(forbiddenWrite), update: vi.fn(forbiddenWrite),
@@ -12,15 +13,25 @@ function readClient(rows: Record<string, unknown[]>) {
   };
   const from = vi.fn((table: string) => {
     if (!(table in rows)) throw new Error(`Unexpected table ${table}`);
-    const result = Promise.resolve({ data: rows[table], error: null });
+    const predicates: ((row: Row) => boolean)[] = [];
+    let bounds: [number, number] | null = null;
+    const result = () => bounds && pageError?.table === table && pageError.start === bounds[0]
+      ? { data: null, error: { message: "fixture page unavailable" } }
+      : { data: (rows[table] as Row[]).filter((row) => predicates.every((predicate) => predicate(row)))
+        .slice(bounds?.[0] ?? 0, bounds ? bounds[1] + 1 : undefined), error: null };
     const query = {
       select: vi.fn<(columns: string) => unknown>(), order: vi.fn(),
-      eq: vi.fn(), is: vi.fn(), lt: vi.fn(), in: vi.fn(), limit: vi.fn(),
-      ...mutations, then: result.then.bind(result),
+      eq: vi.fn(), is: vi.fn(), lt: vi.fn(), in: vi.fn(), limit: vi.fn(), range: vi.fn(),
+      ...mutations, then: (resolve: (value: ReturnType<typeof result>) => unknown) => Promise.resolve(result()).then(resolve),
     };
-    for (const method of ["select", "order", "eq", "is", "lt", "in", "limit"] as const) {
+    for (const method of ["select", "order", "limit"] as const) {
       query[method].mockReturnValue(query);
     }
+    query.eq.mockImplementation((key: string, value: unknown) => { predicates.push((row) => row[key] === value); return query; });
+    query.is.mockImplementation((key: string, value: unknown) => { predicates.push((row) => row[key] === value); return query; });
+    query.lt.mockImplementation((key: string, value: string) => { predicates.push((row) => typeof row[key] === "string" && String(row[key]) < value); return query; });
+    query.in.mockImplementation((key: string, values: unknown[]) => { predicates.push((row) => values.includes(row[key])); return query; });
+    query.range.mockImplementation((start: number, end: number) => { bounds = [start, end]; return query; });
     return query;
   });
   return { from, ...mutations };
@@ -44,6 +55,7 @@ function mixedRows(): Record<string, unknown[]> {
     ],
     payment_attempts: [],
     admin_audit_logs: [],
+    billing_cycles: [],
   };
 }
 
@@ -145,13 +157,135 @@ describe("admin read-only projection", () => {
 
     expect(client.from.mock.calls.map(([table]) => table)).toEqual([
       "donors", "subscriptions", "payments", "payment_attempts", "payment_attempts", "admin_audit_logs",
+      "billing_cycles", "payment_attempts",
     ]);
     for (const { value: query } of client.from.mock.results) {
       expect(query.select).toHaveBeenCalledTimes(1);
+      expect(query.range).toHaveBeenCalledWith(0, 99);
+      expect(query.order).toHaveBeenCalledWith("id", { ascending: true });
+      expect(query.limit).not.toHaveBeenCalled();
     }
     for (const method of ["insert", "update", "upsert", "delete", "rpc"] as const) {
       expect(client[method]).not.toHaveBeenCalled();
     }
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([null, undefined, 0, 2, 15, 31, "unknown"])("never invents day 16 for a monthly stored day %s", async (preferredPaymentDay) => {
+    const rows = mixedRows();
+    rows.subscriptions = [{ id: "sub-fixture", donor_id: "donor-fixture", amount: 1500,
+      frequency: "monthly", status: "active", preferred_payment_day: preferredPaymentDay }];
+    mocks.client.mockResolvedValue(readClient(rows));
+    expect((await loadAdminData()).subscriptions[0].preferredPaymentDay).toBeNull();
+  });
+
+  it("projects only safe retry labels and subscription holds, never raw evidence or source identifiers", async () => {
+    const rows = mixedRows();
+    (rows.subscriptions[0] as Row).billing_hold_reason = "manual_review";
+    rows.billing_cycles = [{ id: "cycle-fixture", subscription_id: "sub-fixture", billing_period: "202610", state: "retry_wait",
+      retry_window_start: "2026-10-09T12:00:00Z", hold_reason: "insufficient_funds", authorization_snapshot: "fixture-private-mandate",
+      payment_source_id: "fixture-private-source", verified_status_message: "fixture-private-status-message" }];
+    rows.payment_attempts = [
+      { id: "attempt-original", subscription_id: "sub-fixture", cycle_id: "cycle-fixture", attempt_number: 1,
+        amount: 1500, state: "declined", created_at: "2026-10-08T18:00:00Z", verified_finalized_at: "2026-10-08T18:01:00Z",
+        verified_reason: "insufficient_funds", verified_status_message: "fixture-private-status-message", verified_evidence: "fixture-private-evidence" },
+      { id: "attempt-additional", subscription_id: "sub-fixture", cycle_id: "cycle-fixture", attempt_number: 2,
+        amount: 1500, state: "prepared", created_at: "2026-10-08T18:01:00Z", verified_reason: "security_unknown" },
+      { id: "attempt-legacy", subscription_id: "sub-fixture", cycle_id: null, attempt_number: null, state: "approved" },
+    ];
+    const client = readClient(rows);
+    mocks.client.mockResolvedValue(client);
+    const data = await loadAdminData();
+    expect(data.subscriptions[0]).toMatchObject({ billingHoldReason: "manual_review", retryAt: "2026-10-09T12:00:00Z" });
+    expect(data.billingAttempts).toEqual([
+      expect.objectContaining({ id: "attempt-original", attemptNumber: 1, reasonLabel: "Fondos insuficientes verificados" }),
+      expect.objectContaining({ id: "attempt-additional", attemptNumber: 2, reasonLabel: "Resultado por revisar" }),
+    ]);
+    const serialized = JSON.stringify(data);
+    expect(serialized).not.toMatch(/source|authorization_snapshot|verified_evidence|verified_status_message/i);
+    expect(serialized).not.toContain("fixture-private");
+    const selections = client.from.mock.results.flatMap(({ value }) => value.select.mock.calls.map(([columns]: [string]) => columns)).join(" ");
+    expect(selections).not.toMatch(/payment_source|authorization_snapshot|verified_evidence|verified_status_message|document|\*/i);
+  });
+
+  it("reads every administrative page beyond both 100 and 1000 rows without truncating summaries or history", async () => {
+    const rows = mixedRows();
+    const count = 1105;
+    const key = (index: number) => String(index).padStart(5, "0");
+    rows.donors = Array.from({ length: count }, (_, index) => ({ id: `donor-${key(index)}`, first_name: "Fixture", last_name: key(index), email: "fake@example.test", created_at: "2026-10-01T12:00:00Z" }));
+    rows.subscriptions = Array.from({ length: count }, (_, index) => ({ id: `sub-${key(index)}`, donor_id: `donor-${key(index)}`, amount: 1500,
+      frequency: "monthly", status: index === count - 1 ? "pending" : "active", preferred_payment_day: null }));
+    rows.payments = Array.from({ length: count }, (_, index) => ({ id: `pay-${key(index)}`, subscription_id: `sub-${key(index)}`, amount: 1500,
+      status: index === count - 1 ? "pending" : "declined", created_at: "2026-10-01T12:00:00Z" }));
+    rows.billing_cycles = Array.from({ length: count }, (_, index) => ({ id: `cycle-${key(index)}`, subscription_id: `sub-${key(index)}`, state: "retry_wait",
+      billing_period: "202610", retry_window_start: "2026-10-09T12:00:00Z" }));
+    rows.payment_attempts = Array.from({ length: count }, (_, index) => ({ id: `attempt-${key(index)}`, subscription_id: `sub-${key(index)}`,
+      donor_id: `donor-${key(index)}`, cycle_id: `cycle-${key(index)}`, attempt_number: 2, state: "unknown", amount: 1500,
+      wompi_transaction_id: null, created_at: "2026-10-01T12:00:00Z" }));
+    rows.admin_audit_logs = Array.from({ length: count }, (_, index) => ({ id: `audit-${key(index)}`, subscription_id: `sub-${key(index)}`,
+      action: "cancel_retry", reason: "Fixture review requested", created_at: "2026-10-01T12:00:00Z" }));
+    const client = readClient(rows);
+    mocks.client.mockResolvedValue(client);
+    const data = await loadAdminData();
+    for (const field of ["donors", "subscriptions", "payments", "billingCycles", "billingAttempts", "recoveryAttempts", "auditEvents"] as const) {
+      expect(data[field]).toHaveLength(count);
+    }
+    expect(data.subscriptions.at(-1)).toMatchObject({ id: "sub-01104", status: "pending" });
+    expect(data.payments.at(-1)).toMatchObject({ id: "pay-01104", status: "pending" });
+    expect(data.auditEvents.at(-1)).toMatchObject({ action: "retry_cancelled" });
+    for (const table of Object.keys(rows)) {
+      const queries = client.from.mock.calls.flatMap(([name], index) => name === table ? [client.from.mock.results[index].value] : []);
+      expect(queries.some((query) => query.range.mock.calls.some(([start]: [number, number]) => start === 100))).toBe(true);
+      expect(queries.some((query) => query.range.mock.calls.some(([start, end]: [number, number]) => start === 1100 && end === 1199))).toBe(true);
+      expect(queries.every((query) => query.limit.mock.calls.length === 0)).toBe(true);
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unavailable later page rather than returning an incomplete donor list", async () => {
+    const rows = mixedRows();
+    rows.donors = Array.from({ length: 101 }, (_, index) => ({ id: `donor-${index}` }));
+    mocks.client.mockResolvedValue(readClient(rows, { table: "donors", start: 100 }));
+    await expect(loadAdminData()).rejects.toThrow("No se pudo cargar");
+  });
+
+  it("rejects duplicate IDs spanning pages instead of counting a row twice", async () => {
+    const rows = mixedRows();
+    rows.donors = [...Array.from({ length: 100 }, (_, index) => ({ id: `donor-${index}` })), { id: "donor-0" }];
+    mocks.client.mockResolvedValue(readClient(rows));
+    await expect(loadAdminData()).rejects.toThrow("No se pudo cargar");
+  });
+
+  it.each([
+    [true, "sí"], [false, "no"], [undefined, "desconocido"], [null, "desconocido"], ["true", "desconocido"],
+  ])("projects recorded reactivation consent %s without inventing historical consent", async (consent, label) => {
+    const rows = mixedRows();
+    rows.admin_audit_logs = [{ id: "audit-reactivation", subscription_id: "sub-fixture", action: "reactivate",
+      reason: "Fixture authorization instruction", before_value: { status: "cancelled" },
+      after_value: { status: "active", ...(consent === undefined ? {} : { donor_authorization_confirmed: consent }),
+        payment_source_id: "fixture-private-source", billing_authorization: "fixture-private-mandate" },
+      created_at: "2026-10-08T12:00:00Z" }];
+    mocks.client.mockResolvedValue(readClient(rows));
+    const data = await loadAdminData();
+    expect(data.auditEvents[0]).toMatchObject({ action: "subscription_reactivated" });
+    expect(data.auditEvents[0].detail).toContain(`Autorización del donante confirmada: ${label}.`);
+    expect(JSON.stringify(data)).not.toContain("fixture-private");
+  });
+
+  it.each([
+    [{ providerStatus: "approved" }, "approved"],
+    [{ provider_status: "pending" }, "pending"],
+    [{ providerStatus: "declined", provider_status: "pending" }, "declined"],
+    [{}, "sin estado"],
+  ])("projects v2 and legacy provider status from safe audit fields: %j", async (after, label) => {
+    const rows = mixedRows();
+    rows.admin_audit_logs = [{ id: "audit-recovery", subscription_id: "sub-fixture", action: "payment_recovery",
+      reason: "Fixture verified transaction", after_value: { ...after, payment_source_id: "fixture-private-source",
+        verified_evidence: "fixture-private-evidence" }, created_at: "2026-10-08T12:00:00Z" }];
+    mocks.client.mockResolvedValue(readClient(rows));
+    const data = await loadAdminData();
+    expect(data.auditEvents[0]).toMatchObject({ action: "payment_recovered" });
+    expect(data.auditEvents[0].detail).toContain(`Intento conciliado con Wompi: ${label}.`);
+    expect(JSON.stringify(data)).not.toContain("fixture-private");
   });
 });

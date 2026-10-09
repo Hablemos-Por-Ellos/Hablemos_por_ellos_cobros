@@ -163,6 +163,20 @@ describe("private backup integrity", () => {
     await expect(withOriginalExtensionInstaller(client, async () => {})).rejects.toThrow("EXPLICIT_OFFLINE_INSTALLER_REQUIRED");
     expect(calls).toHaveLength(1);
   });
+  it("uses native extension installation in an isolated vanilla PostgreSQL fixture without changing roles/settings", async () => {
+    const calls = [];
+    const client = { query: async (sql) => {
+      calls.push(sql);
+      if (sql.startsWith("select current_database")) return { rows: [{ database: "hpe_restore_retry040123", operator: "postgres", superuser: true }] };
+      if (sql.startsWith("select rolsuper")) return { rows: [{ rolsuper: true }] };
+      return { rows: [] };
+    } };
+    let installed = false;
+    await withOriginalExtensionInstaller(client, async () => { installed = true; });
+    expect(installed).toBe(true);
+    expect(calls.some((sql) => /^alter /i.test(sql))).toBe(false);
+    expect(calls.at(-1)).toContain("pg_advisory_unlock");
+  });
   it("rejects unexpected roles and LOGIN changes, with only explicit offline overrides", () => {
     const role = { rolname: "admin", rolsuper: false, rolcanlogin: true };
     const expected = { tables: [], roles: [role] };

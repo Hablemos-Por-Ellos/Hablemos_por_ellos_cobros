@@ -192,6 +192,15 @@ export function DonorFormStep({ values, onChange, onSubmit, loading }: DonorForm
           </div>
         </div>
         {values.isRecurring && (
+          <label className="flex items-start gap-3 text-sm text-slate-700">
+            <input type="checkbox" checked={values.retryAuthorizationConfirmed === true}
+              onChange={(event) => handleFieldChange("retryAuthorizationConfirmed", event.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-slate-300" />
+            <span>Autorizo un solo intento adicional al día siguiente si Wompi confirma fondos insuficientes.
+              Si también falla, se detendrán los cobros automáticos hasta una nueva autorización.</span>
+          </label>
+        )}
+        {values.isRecurring && (
           <fieldset className="grid gap-3 rounded-3xl border border-foundation-blue/20 bg-foundation-blue/[0.04] p-4">
             <legend className="text-base font-semibold text-slate-900">Fecha de cobro mensual</legend>
             <p className="-mt-2 text-sm leading-relaxed text-slate-600">

@@ -8,7 +8,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("administrative demo identification", () => {
   it("keeps the fictitious-data subtitle visible independently of responsive badges", () => {
-    render(<AdminConsole initialView="donors" initialData={createAdminDemoState()} demo />);
+    render(<AdminConsole initialView="donors" initialData={createAdminDemoState()} demo adminEmail="local@example.test" />);
     const subtitle = within(screen.getByRole("banner")).getByText("Datos ficticios · Vista local");
     expect(subtitle).toBeVisible();
     expect(subtitle.closest(".hidden")).toBeNull();
@@ -22,12 +22,15 @@ describe("administrative demo identification", () => {
   });
 });
 
-describe("administrative table scroll containment", () => {
-  it.each(["donors", "subscriptions"] as const)("keeps hidden column labels inside the %s scroller", (view) => {
+describe("compact administrative registry", () => {
+  it.each(["donors", "subscriptions"] as const)("uses a fixed %s desktop table and a separate mobile list", (view) => {
     render(<AdminConsole initialView={view} initialData={createAdminDemoState()} demo adminEmail="fixture@example.test" />);
     const scroller = screen.getByRole("table").parentElement;
-    expect(scroller).toHaveClass("overflow-x-auto", "relative");
+    expect(scroller).toHaveClass("hidden", "relative", "lg:block");
+    expect(scroller).not.toHaveClass("overflow-x-auto");
+    expect(screen.getByRole("table")).toHaveClass("table-fixed", "w-full");
     expect(scroller?.querySelector(".sr-only")).not.toBeNull();
+    expect(screen.getAllByTestId("mobile-subscription-row").length).toBeGreaterThan(0);
   });
 });
 

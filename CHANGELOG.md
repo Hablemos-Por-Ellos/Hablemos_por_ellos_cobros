@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.4.0 - 2026-10-08 - Release Candidate, Cutover Preparation
+
+- Work on `codex/monthly-payment-retry`: compact administrative registry,
+  mobile two-level rows and a separate timeline for payments and attempts.
+- Introduce explicit billing cycles with one original and at most one
+  additional attempt after verified insufficient funds, within the next
+  Colombian day's 07:00-to-midnight window. Unknown results are reconciled,
+  never blindly resent; one-time donations are excluded from automatic retries.
+- Prepare a NEW additive migration and fictitious local laboratory. Preserve
+  the applied 0.3.0 migration and all historical records; do not backfill consent.
+- Align actual API/job/webhook envelopes with PostgreSQL, isolate linked legacy
+  reviews, and replay administrative requests independently of provider changes.
+  Keepalive becomes authenticated read-only; history is not cleaned up by it.
+- Local dependency patches: Next/eslint-config-next 15.5.27, sharp 0.35.5 and
+  source-map-js 1.2.2. Runtime audit clean; development-tool alerts remain documented.
+- Add the guarded 0.4.0 migration entry point while retaining the 0.3.0 wrapper.
+  Rehearse an encrypted fictional backup, restoration, content/ACL comparison,
+  new-marker preservation and migration without accessing production backups.
+- Exercise actual HTTP handlers and job/receipt code against PostgreSQL with
+  mocked providers: six route cases and 15 job scenarios/313 checks. Repeated
+  monthly confirmation retains its durable retry status without another POST.
+- Local verification evidence is in docs/VALIDATION_0.4.0.md. Independent QA
+  approved the bounded local scope after reproducing routes and job/SQL in an
+  OS-enforced private sandbox; real Auth/provider/deployment checks remain gated.
+- Implementation and verification are local. No commit, push, deployment,
+  production SQL, provider charge or production configuration change is
+  authorized by this phase. Production migration requires separate approval,
+  a fresh encrypted backup, verified restoration and content comparison.
+- The owner subsequently requested the complete production migration on
+  October 8. Read-only production preflight passed; GitHub charge/activity
+  workflows are paused with cutover/false gates and no active runs. Production
+  deployment/migration remain pending verified maintenance and the FINAL backup;
+  financial reopening still requires a separate owner confirmation.
+
 ## 0.3.1 - 2026-10-04 - Administrative Contribution Types
 
 - Show Mensual / Unico in subscriptions, linked payment history and donor

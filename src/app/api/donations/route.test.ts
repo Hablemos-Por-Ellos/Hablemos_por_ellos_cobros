@@ -195,7 +195,7 @@ vi.mock("@/lib/wompi-server", () => ({
   getWompiTransaction: vi.fn(),
 }));
 
-import { POST } from "./route";
+import { POST } from "../../../../tests/contracts/donations-v030";
 import { createWompiPaymentSource, createWompiTransaction, getWompiAcceptance, getWompiTransaction } from "@/lib/wompi-server";
 
 const donor = {
@@ -219,7 +219,7 @@ function request(body: unknown) {
   });
 }
 
-describe("POST /api/donations hardened checkout", () => {
+describe("historical v0.3.0 checkout contract (not the v0.4.0 HTTP route)", () => {
   beforeEach(() => {
     Object.keys(state).forEach((key) => delete state[key]);
     mutations.length = 0;
@@ -274,7 +274,7 @@ describe("POST /api/donations hardened checkout", () => {
     if (failure === "sourceAcceptance") vi.mocked(getWompiAcceptance).mockRejectedValueOnce(new Error("ACCEPTANCE_FAILED"));
     if (failure === "sourceCreation") vi.mocked(createWompiPaymentSource).mockRejectedValueOnce(new Error("SOURCE_FAILED"));
     if (failure === "unavailableSource") vi.mocked(createWompiPaymentSource).mockResolvedValueOnce({
-      id: "src-unavailable", type: "CARD", status: "ERROR", maskedDetails: null,
+      id: "src-unavailable", type: "CARD", status: "ERROR", maskedDetails: "",
     });
     if (failure === "transactionAcceptance") {
       vi.mocked(getWompiAcceptance).mockResolvedValueOnce({
@@ -309,7 +309,7 @@ describe("POST /api/donations hardened checkout", () => {
       expect(state.attempt.state).toBe("dispatching");
       expect(state.attempt.dispatched_at ?? null).toBeNull();
       expect(createWompiTransaction).not.toHaveBeenCalled();
-      return { id: "src-server", type: "CARD", status: "AVAILABLE", maskedDetails: null };
+      return { id: "src-server", type: "CARD", status: "AVAILABLE", maskedDetails: "" };
     });
     vi.mocked(createWompiTransaction).mockImplementationOnce(async () => {
       expect(state.attempt.state).toBe("dispatching");
@@ -344,7 +344,7 @@ describe("POST /api/donations hardened checkout", () => {
     vi.mocked(createWompiPaymentSource).mockImplementationOnce(async () => {
       state.attempt = { ...state.attempt, state: "pending", wompi_transaction_id: "tx-concurrent",
         dispatched_at: "2026-08-18T13:00:00.000Z" };
-      return { id: "src-server", type: "CARD", status: "AVAILABLE", maskedDetails: null };
+      return { id: "src-server", type: "CARD", status: "AVAILABLE", maskedDetails: "" };
     });
     await POST(request(body));
     expect(createWompiTransaction).not.toHaveBeenCalled();
@@ -358,7 +358,7 @@ describe("POST /api/donations hardened checkout", () => {
     const preparation = new Promise<void>((resolve) => { releaseSource = resolve; });
     vi.mocked(createWompiPaymentSource).mockImplementationOnce(async () => {
       await preparation;
-      return { id: "src-server", type: "CARD", status: "AVAILABLE", maskedDetails: null };
+      return { id: "src-server", type: "CARD", status: "AVAILABLE", maskedDetails: "" };
     });
     const first = POST(request(body));
     await vi.waitFor(() => expect(createWompiPaymentSource).toHaveBeenCalledOnce());

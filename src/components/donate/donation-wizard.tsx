@@ -20,6 +20,7 @@ const INITIAL_DONOR: DonorFormValues = {
   city: "",
   wantsUpdates: false,
   isRecurring: true,
+  retryAuthorizationConfirmed: false,
   preferredPaymentDay: 16,
   amount: 50000,
 };

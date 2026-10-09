@@ -33,11 +33,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, message: "No se pudo verificar la base de datos." }, { status: 500 });
   }
 
-  const { error: cleanupError } = await supabase.rpc("cleanup_expired_operational_rows");
-  if (cleanupError) {
-    console.error("keepalive_cleanup_failed", { code: cleanupError.code });
-    return NextResponse.json({ ok: false, message: "No se pudo completar el mantenimiento." }, { status: 500 });
-  }
-
+  // Activity checks never delete history or call a revoked v1 financial writer.
   return NextResponse.json({ ok: true }, { status: 200 });
 }

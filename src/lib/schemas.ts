@@ -14,6 +14,7 @@ export const donorFormSchema = z.object({
   city: z.string().min(2, "Ciudad inválida").max(100),
   wantsUpdates: z.boolean().default(false),
   isRecurring: z.boolean().default(true),
+  retryAuthorizationConfirmed: z.boolean().optional(),
   preferredPaymentDay: z.union([z.literal(1), z.literal(6), z.literal(16), z.literal(28)]).default(16),
   amount: z
     .number({ invalid_type_error: "Selecciona un monto" })

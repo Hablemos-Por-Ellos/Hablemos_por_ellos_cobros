@@ -36,6 +36,7 @@ export type WompiTransactionResult = {
   paymentSourceId?: string | null;
   paymentMethodType?: string | null;
   finalizedAt?: string | null;
+  statusMessage?: string | null;
 };
 
 function redactWompiText(value: string) {
@@ -214,7 +215,9 @@ export async function createWompiTransaction(params: {
   acceptanceToken: string;
   acceptPersonalAuth: string;
   recurrent?: boolean;
+  onSending?: () => void;
 }): Promise<WompiTransactionResult> {
+  params.onSending?.();
   const response = await fetch(`${getWompiApiBaseUrl()}/transactions`, {
     method: "POST",
     headers: {
@@ -287,6 +290,7 @@ export async function getWompiTransaction(transactionId: string): Promise<WompiT
         ? data.payment_method.type
         : null,
     finalizedAt: typeof data.finalized_at === "string" ? data.finalized_at : null,
+    statusMessage: typeof data.status_message === "string" ? data.status_message : null,
   };
 }
 

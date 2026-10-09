@@ -1,22 +1,24 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { decryptBackupBuffer, fileSha256 } from "./backup-crypto.mjs";
 import { compareManifests, databaseManifest, quoteIdentifier } from "./database-manifest.mjs";
 import { parseArguments, postgresClient, privateConfig, safeOpsFailure } from "./private-config.mjs";
 import { restoreArchive } from "./restore-archive.mjs";
 import { reparseCheckDefinitions, restoreSchemaPermissions } from "./restore-metadata.mjs";
+import { assertLocalLab } from "./local-docker-stream.mjs";
 
 export async function restoreBackup(args) {
-  if (!args.backup || !/^hpe-(admin|backup)-lab-[a-z0-9-]+$/.test(args.container ?? "")) throw new Error("EXPLICIT_LAB_TARGET_REQUIRED");
+  if (!args.backup) throw new Error("EXPLICIT_LAB_TARGET_REQUIRED");
+  assertLocalLab(args.container);
   if (!args['lab-url']) throw new Error("LOCAL_LAB_URL_REQUIRED");
   if (args['restore-role'] && args['restore-role'] !== "postgres") throw new Error("UNAPPROVED_LOCAL_RESTORE_ROLE");
   const labUrl = new URL(args['lab-url']);
   if (!["localhost", "127.0.0.1", "[::1]"].includes(labUrl.hostname)) throw new Error("RESTORE_ONLY_PERMITTED_LOCALLY");
-  const label = execFileSync("docker", ["inspect", "--format", '{{index .Config.Labels "codex.project"}}', args.container], { encoding: "utf8", windowsHide: true }).trim();
-  if (!["hpe-admin-030", "hpe-backup-030"].includes(label)) throw new Error("CONTAINER_NOT_OWNED_BY_THIS_LAB");
+  if (args.container === "hpe-retry-v040-local" && !/^hpe_restore_retry040\d+$/.test(labUrl.pathname.slice(1))) {
+    throw new Error("EXPLICIT_EMPTY_RETRY_RESTORE_DATABASE_REQUIRED");
+  }
   const directory = path.resolve(args.backup);
   const metadata = JSON.parse(await fs.promises.readFile(path.join(directory, "verification.json"), "utf8"));
   for (const [name, key] of [["database.hpebk", "dumpEncryptedSha256"], ["manifest.hpebk", "manifestEncryptedSha256"]]) {

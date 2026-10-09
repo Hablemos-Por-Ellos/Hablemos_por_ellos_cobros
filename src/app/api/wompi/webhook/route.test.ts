@@ -100,6 +100,18 @@ describe("POST /api/wompi/webhook", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
+  it.each([null, "cycle-fixture"])("applies v2 ordinal attempts even when cycle ID is %s", async (cycle_id) => {
+    rpc.mockImplementation(async (name: string) => ({ data: name === "billing_retry_schema_ready"
+      ? true : { result: "processed" }, error: null }));
+    maybeSingleAttempt.mockResolvedValue({ data: { id: "attempt-fixture", cycle_id, attempt_number: 1 }, error: null });
+    const response = await POST(new Request("https://example.test/api/wompi/webhook", { method: "POST", body: JSON.stringify(payload()) }));
+    expect(response.status).toBe(200);
+    expect(rpc).toHaveBeenCalledWith("billing_v2_apply_result", { p_attempt_id: "attempt-fixture",
+      p_transaction: expect.objectContaining({ id: "tx-1", verification_source: "provider_get", environment: "prod", payment_source_id: "src-1" }) });
+    expect(rpc).toHaveBeenCalledWith("mark_wompi_receipt", expect.objectContaining({ p_result: "processed" }));
+    expect(rpc).not.toHaveBeenCalledWith("apply_verified_wompi_event", expect.anything());
+  });
+
   it("rejects events from a different environment", async () => {
     const event = { ...payload(), environment: "test" };
     const response = await POST(new Request("https://example.test/api/wompi/webhook", { method: "POST", body: JSON.stringify(event) }));
@@ -174,7 +186,7 @@ describe("POST /api/wompi/webhook", () => {
     expect(response.status).toBe(200);
     expect(getWompiTransaction).toHaveBeenNthCalledWith(1, "tx-retry-approved");
     expect(getWompiTransaction).toHaveBeenNthCalledWith(2, "tx-first-pending");
-    expect(rpc.mock.calls.map((call) => call[1].p_transaction_id)).toEqual([
+    expect(rpc.mock.calls.filter(([name]) => name === "apply_verified_wompi_event").map((call) => call[1].p_transaction_id)).toEqual([
       "tx-first-pending",
       "tx-retry-approved",
     ]);
@@ -213,7 +225,7 @@ describe("POST /api/wompi/webhook", () => {
     }));
 
     expect(response.status).toBe(500);
-    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc.mock.calls.filter(([name]) => name === "apply_verified_wompi_event")).toHaveLength(1);
     expect(rpc).toHaveBeenCalledWith("apply_verified_wompi_event", expect.objectContaining({
       p_transaction_id: "tx-first-pending",
       p_status: "pending",
@@ -256,7 +268,7 @@ describe("POST /api/wompi/webhook", () => {
     }));
 
     expect(response.status).toBe(200);
-    expect(rpc.mock.calls.map((call) => call[1].p_transaction_id)).toEqual([
+    expect(rpc.mock.calls.filter(([name]) => name === "apply_verified_wompi_event").map((call) => call[1].p_transaction_id)).toEqual([
       "tx-retry-approved",
       "tx-old-declined",
     ]);

@@ -1,5 +1,28 @@
 export type DemoSubscriptionStatus = "active" | "cancelled" | "past_due" | "pending";
 export type DemoPaymentStatus = "approved" | "pending" | "declined";
+export type DemoAttemptState = "prepared" | "dispatching" | "pending" | "approved" | "declined" | "unknown" | "cancelled" | "failed";
+
+// Administrative projections deliberately exclude payment sources and raw provider payloads.
+export type DemoBillingAttempt = {
+  id: string;
+  subscriptionId: string;
+  cycleId: string;
+  attemptNumber: 1 | 2;
+  state: DemoAttemptState;
+  amount: number;
+  createdAt: string;
+  finalizedAt?: string | null;
+  reasonLabel?: string | null;
+};
+
+export type DemoBillingCycle = {
+  id: string;
+  subscriptionId: string;
+  billingPeriod: string;
+  state: "open" | "retry_wait" | "approved" | "manual_review" | "cancelled";
+  retryAt?: string | null;
+  holdReason?: string | null;
+};
 
 export type DemoDonor = {
   id: string;
@@ -23,6 +46,10 @@ export type DemoSubscription = {
   reference: string;
   createdAt: string;
   billingVersion: number;
+  billingHoldReason?: string | null;
+  retryAt?: string | null;
+  attemptNumber?: 1 | 2 | null;
+  attemptState?: DemoAttemptState | null;
 };
 
 export type DemoPayment = {
@@ -56,7 +83,8 @@ export type DemoAuditEvent = {
     | "subscription_cancelled"
     | "subscription_reactivated"
     | "payment_recovered"
-    | "payment_recovery_closed";
+    | "payment_recovery_closed"
+    | "retry_cancelled";
   detail: string;
   createdAt: string;
   actorLabel?: string;
@@ -69,12 +97,38 @@ export type AdminDemoState = {
   payments: DemoPayment[];
   recoveryAttempts: DemoRecoveryAttempt[];
   auditEvents: DemoAuditEvent[];
+  billingCycles?: DemoBillingCycle[];
+  billingAttempts?: DemoBillingAttempt[];
 };
 
 const DEMO_NOW = new Date("2026-08-31T12:00:00.000Z");
 
 const DEMO_STATE: AdminDemoState = {
   donors: [
+    {
+      id: "donor-pending",
+      fullName: "Tomas Vega Demo",
+      email: "tomas.vega@example.test",
+      phone: "+57 300 000 0082",
+      city: "Cali",
+      joinedAt: "2026-08-31T12:00:00.000Z",
+    },
+    {
+      id: "donor-retry",
+      fullName: "Lucia Rivas Demo",
+      email: "lucia.rivas@example.test",
+      phone: "+57 300 000 0042",
+      city: "Bogota",
+      joinedAt: "2026-07-06T12:00:00.000Z",
+    },
+    {
+      id: "donor-security",
+      fullName: "Camilo Luna Demo",
+      email: "camilo.luna@example.test",
+      phone: "+57 300 000 0071",
+      city: "Medellin",
+      joinedAt: "2026-07-06T12:00:00.000Z",
+    },
     {
       id: "donor-unico",
       fullName: "Sofia Demo",
@@ -167,10 +221,13 @@ const DEMO_STATE: AdminDemoState = {
       status: "past_due",
       paymentMethod: "Tarjeta tokenizada",
       preferredPaymentDay: 6,
-      nextPaymentDate: "2026-08-06T12:00:00.000Z",
+      nextPaymentDate: null,
       reference: "HPE-DEMO-ELENA-2330",
       createdAt: "2026-03-22T16:20:00.000Z",
       billingVersion: 0,
+      billingHoldReason: "retry_exhausted",
+      attemptNumber: 2,
+      attemptState: "declined",
     },
     {
       id: "sub-julian",
@@ -180,10 +237,13 @@ const DEMO_STATE: AdminDemoState = {
       status: "pending",
       paymentMethod: "Tarjeta tokenizada",
       preferredPaymentDay: 28,
-      nextPaymentDate: "2026-09-28T12:00:00.000Z",
+      nextPaymentDate: null,
       reference: "HPE-DEMO-JULIAN-6174",
       createdAt: "2026-06-12T20:45:00.000Z",
       billingVersion: 0,
+      billingHoldReason: "result_unknown",
+      attemptNumber: 1,
+      attemptState: "unknown",
     },
     {
       id: "sub-lucia",
@@ -224,8 +284,88 @@ const DEMO_STATE: AdminDemoState = {
       createdAt: "2026-08-20T15:00:00.000Z",
       billingVersion: 0,
     },
+    {
+      id: "sub-retry",
+      donorId: "donor-retry",
+      amount: 30000,
+      frequency: "monthly",
+      status: "past_due",
+      paymentMethod: "Tarjeta tokenizada",
+      preferredPaymentDay: 6,
+      nextPaymentDate: null,
+      reference: "HPE-DEMO-RETRY",
+      createdAt: "2026-07-06T12:00:00.000Z",
+      billingVersion: 0,
+      billingHoldReason: "retry_scheduled",
+      retryAt: "2026-09-01T12:00:00.000Z",
+      attemptNumber: 1,
+      attemptState: "declined",
+    },
+    {
+      id: "sub-security",
+      donorId: "donor-security",
+      amount: 40000,
+      frequency: "monthly",
+      status: "past_due",
+      paymentMethod: "Tarjeta tokenizada",
+      preferredPaymentDay: 6,
+      nextPaymentDate: null,
+      reference: "HPE-DEMO-SECURITY",
+      createdAt: "2026-07-06T12:00:00.000Z",
+      billingVersion: 0,
+      billingHoldReason: "security_decline",
+      attemptNumber: 1,
+      attemptState: "declined",
+    },
+    {
+      id: "sub-pending",
+      donorId: "donor-pending",
+      amount: 25000,
+      frequency: "monthly",
+      status: "pending",
+      paymentMethod: "Tarjeta tokenizada",
+      preferredPaymentDay: 16,
+      nextPaymentDate: null,
+      reference: "HPE-DEMO-PENDING",
+      createdAt: "2026-08-31T12:00:00.000Z",
+      billingVersion: 0,
+      attemptNumber: 1,
+      attemptState: "pending",
+    },
   ],
   payments: [
+    {
+      id: "pay-pending-initial",
+      subscriptionId: "sub-pending",
+      amount: 25000,
+      status: "pending",
+      createdAt: "2026-08-31T12:01:00.000Z",
+      wompiTransactionId: "demo-pending-initial",
+    },
+    {
+      id: "pay-retry-original",
+      subscriptionId: "sub-retry",
+      amount: 30000,
+      status: "declined",
+      createdAt: "2026-08-31T12:04:00.000Z",
+      wompiTransactionId: "demo-retry-original",
+    },
+    {
+      id: "pay-elena-additional",
+      subscriptionId: "sub-elena",
+      amount: 30000,
+      status: "declined",
+      createdAt: "2026-08-07T12:04:00.000Z",
+      wompiTransactionId: "demo-exhausted-additional",
+    },
+    {
+      id: "pay-security",
+      subscriptionId: "sub-security",
+      amount: 40000,
+      status: "declined",
+      createdAt: "2026-08-31T12:05:00.000Z",
+      wompiTransactionId: "demo-security-original",
+    },
     {
       id: "pay-unico",
       subscriptionId: "sub-unico",
@@ -298,9 +438,9 @@ const DEMO_STATE: AdminDemoState = {
     {
       id: "event-002",
       subscriptionId: "sub-elena",
-      action: "payment_approved",
-      detail: "El ultimo intento requiere revision por resultado rechazado.",
-      createdAt: "2026-08-06T12:08:00.000Z",
+      action: "payment_recovery_closed",
+      detail: "Original y adicional rechazados. Sin futuros cobros automaticos.",
+      createdAt: "2026-08-07T12:04:00.000Z",
     },
     {
       id: "event-003",
@@ -317,9 +457,24 @@ const DEMO_STATE: AdminDemoState = {
       createdAt: "2026-08-16T12:06:00.000Z",
     },
   ],
+  billingCycles: [
+    { id: "cycle-pending", subscriptionId: "sub-pending", billingPeriod: "202608", state: "open" },
+    { id: "cycle-retry", subscriptionId: "sub-retry", billingPeriod: "202608", state: "retry_wait", retryAt: "2026-09-01T12:00:00.000Z", holdReason: "retry_scheduled" },
+    { id: "cycle-elena", subscriptionId: "sub-elena", billingPeriod: "202608", state: "manual_review", holdReason: "retry_exhausted" },
+    { id: "cycle-julian", subscriptionId: "sub-julian", billingPeriod: "202608", state: "open", holdReason: "result_unknown" },
+    { id: "cycle-security", subscriptionId: "sub-security", billingPeriod: "202608", state: "manual_review", holdReason: "security_decline" },
+  ],
+  billingAttempts: [
+    { id: "attempt-pending-1", subscriptionId: "sub-pending", cycleId: "cycle-pending", attemptNumber: 1, state: "pending", amount: 25000, createdAt: "2026-08-31T12:00:00.000Z", reasonLabel: "Esperando estado final; sin repetir el envío" },
+    { id: "attempt-retry-1", subscriptionId: "sub-retry", cycleId: "cycle-retry", attemptNumber: 1, state: "declined", amount: 30000, createdAt: "2026-08-31T12:00:00.000Z", finalizedAt: "2026-08-31T12:04:00.000Z", reasonLabel: "Fondos insuficientes verificados" },
+    { id: "attempt-elena-1", subscriptionId: "sub-elena", cycleId: "cycle-elena", attemptNumber: 1, state: "declined", amount: 30000, createdAt: "2026-08-06T12:00:00.000Z", finalizedAt: "2026-08-06T12:08:00.000Z", reasonLabel: "Fondos insuficientes verificados" },
+    { id: "attempt-elena-2", subscriptionId: "sub-elena", cycleId: "cycle-elena", attemptNumber: 2, state: "declined", amount: 30000, createdAt: "2026-08-07T12:00:00.000Z", finalizedAt: "2026-08-07T12:04:00.000Z", reasonLabel: "Adicional rechazado" },
+    { id: "attempt-review-julian", subscriptionId: "sub-julian", cycleId: "cycle-julian", attemptNumber: 1, state: "unknown", amount: 20000, createdAt: "2026-08-28T12:02:00.000Z", reasonLabel: "Resultado incierto; conciliar el mismo intento" },
+    { id: "attempt-security-1", subscriptionId: "sub-security", cycleId: "cycle-security", attemptNumber: 1, state: "declined", amount: 40000, createdAt: "2026-08-31T12:00:00.000Z", finalizedAt: "2026-08-31T12:05:00.000Z", reasonLabel: "Rechazo de seguridad; sin adicional automatico" },
+  ],
 };
 
-export const DEMO_STORAGE_KEY = "hpe-admin-local-demo-v2";
+export const DEMO_STORAGE_KEY = "hpe-admin-local-demo-v4";
 
 export function createAdminDemoState(): AdminDemoState {
   return JSON.parse(JSON.stringify(DEMO_STATE)) as AdminDemoState;

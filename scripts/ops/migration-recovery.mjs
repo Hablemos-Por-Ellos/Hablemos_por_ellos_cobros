@@ -2,6 +2,21 @@
 import { compareManifests, databaseManifest } from "./database-manifest.mjs";
 
 export const PAYMENT_MIGRATION = "payment-admin-hardening-v0.3.0";
+export const BILLING_RETRY_MIGRATION = "billing-retry-v0.4.0";
+const MIGRATIONS = new Set([PAYMENT_MIGRATION, BILLING_RETRY_MIGRATION]);
+
+export function migrationPreservationManifest(original, actual, migration) {
+  if (!MIGRATIONS.has(migration)) throw new Error("KNOWN_MIGRATION_REQUIRED");
+  const key = JSON.stringify([migration]);
+  const before = original.tables.find((table) => table.schema === "public" && table.name === "payment_admin_migrations");
+  if (!before || before.rows.some((row) => row.key === key)) return actual;
+  const after = actual.tables.find((table) => table.schema === "public" && table.name === "payment_admin_migrations");
+  if (!after || JSON.stringify(before.keys) !== JSON.stringify(["name"])) return actual;
+  const added = after.rows.filter((row) => row.key === key);
+  if (added.length > 1) throw new Error("MIGRATION_MARKER_IDENTITY_INVALID");
+  return { ...actual, tables: actual.tables.map((table) => table === after
+    ? { ...table, rows: table.rows.filter((row) => row.key !== key), count: table.count - added.length } : table) };
+}
 export const WRITER_IDENTITY_SQL = `select pg_backend_pid() as pid, backend_start::text as backend_start
   from pg_catalog.pg_stat_activity where pid = pg_backend_pid()`;
 
@@ -28,12 +43,12 @@ export async function closeMigrationConnection(client, timeoutMs = 2000) {
 }
 
 export async function observePaymentMigration({ createObserver, failedClient, writerIdentity,
-  expectedDatabase, digest, originalManifest, readManifest = databaseManifest }) {
+  expectedDatabase, digest, originalManifest, readManifest = databaseManifest, migration = PAYMENT_MIGRATION }) {
   const result = { state: "unknown", code: "RECOVERY_OBSERVATION_FAILED", observerFresh: false,
     observerReadOnly: false, observerClosed: false, writerStoppedVerified: false,
     markerVerified: false, preservationChecked: false, originalRecordsPreserved: false,
     keepCutover: true, automaticRetry: false };
-  if (!/^[0-9a-f]{64}$/.test(digest ?? "") || !expectedDatabase) {
+  if (!/^[0-9a-f]{64}$/.test(digest ?? "") || !expectedDatabase || !MIGRATIONS.has(migration)) {
     result.code = "RECOVERY_INPUT_INVALID";
     return result;
   }
@@ -87,7 +102,7 @@ export async function observePaymentMigration({ createObserver, failedClient, wr
         return result;
       }
       markerFiltered = visibility.filtered;
-      markers = (await query("select digest from public.payment_admin_migrations where name=$1", [PAYMENT_MIGRATION])).rows;
+      markers = (await query("select digest from public.payment_admin_migrations where name=$1", [migration])).rows;
     } else if (catalog?.present !== false) {
       result.code = "RECOVERY_CATALOG_EVIDENCE_INVALID";
       return result;
@@ -107,7 +122,8 @@ export async function observePaymentMigration({ createObserver, failedClient, wr
       result.code = "RECOVERY_WRITER_UNRESOLVED";
     }
     if (originalManifest) {
-      const actual = await readManifest(observer, { original: originalManifest });
+      let actual = await readManifest(observer, { original: originalManifest });
+      if (result.markerVerified) actual = migrationPreservationManifest(originalManifest, actual, migration);
       result.originalRecordsPreserved = compareManifests(originalManifest, actual, { allowAdditionalReceipts: true }).length === 0;
       result.preservationChecked = true;
       if (!result.originalRecordsPreserved) result.code = "RECOVERY_PRESERVATION_FAILED";

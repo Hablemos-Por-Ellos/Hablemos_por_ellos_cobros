@@ -20,6 +20,10 @@ export async function withOriginalExtensionInstaller(client, install) {
   try {
     const role = (await client.query("select rolsuper from pg_roles where rolname='postgres'")).rows[0];
     config = (await client.query("select setting,context,source,sourcefile from pg_settings where name='supautils.privileged_extensions'")).rows[0];
+    if (role?.rolsuper && !config) {
+      const delegated = await client.query("select 1 from pg_extension where extname='supautils'");
+      if (!delegated.rows.length) return await install();
+    }
     if (!role || !config || config.context !== "sighup" || !["default", "configuration file"].includes(config.source)) throw new Error("LOCAL_EXTENSION_INSTALLER_NOT_VALIDATED");
     if (!role.rolsuper) { elevated = true; await client.query("alter role postgres superuser"); }
     // This image otherwise delegates even SUPERUSER extension installation to

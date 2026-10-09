@@ -25,7 +25,7 @@ function fixture({ user = true, aal = "aal2", role = "admin", active = true, cut
       admin.sessions_valid_after = new Date().toISOString();
       return { data: true, error: null };
     }
-    return { data: name === "admin_update_subscription"
+    return { data: name === "billing_v2_admin_update_subscription"
       ? { id, amount: 31000, status: "active", preferred_payment_day: 16, next_payment_date: "2040-01-16T12:00:00Z", billing_version: 4 } : true, error: null };
   });
   const client = { from, rpc, auth: {
@@ -59,7 +59,7 @@ describe("direct APIs use the real authorization boundary", () => {
     vi.stubEnv("FINANCIAL_OPERATIONS_ENABLED", "true");
     mocks.clearCookies.mockResolvedValue(true);
   });
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
   it.each([
     ["visitor", { user: false }], ["AAL1", { aal: "aal1" }], ["suspended", { active: false }],
     ["invalid role", { role: "viewer" }], ["expired", { expired: true }],
@@ -73,15 +73,18 @@ describe("direct APIs use the real authorization boundary", () => {
     expect(recovery.status).toBe(401);
     expect(client.auth.mfa.challengeAndVerify).not.toHaveBeenCalled();
     expect(mocks.transaction).not.toHaveBeenCalled();
-    expect(client.rpc).not.toHaveBeenCalledWith("admin_update_subscription", expect.anything());
-    expect(client.rpc).not.toHaveBeenCalledWith("admin_reconcile_payment_attempt", expect.anything());
+    expect(client.rpc).not.toHaveBeenCalledWith("billing_v2_admin_update_subscription", expect.anything());
+    expect(client.rpc).not.toHaveBeenCalledWith("billing_v2_admin_reconcile_payment_attempt", expect.anything());
+    expect(mocks.source).not.toHaveBeenCalled();
   });
   it.each(["admin", "super_admin"])("permits %s AAL2 with a fresh challenge and sends its verified context", async (role) => {
     const client = fixture({ role });
     const response = await PATCH(request(`subscriptions/${id}`, "PATCH"), { params: Promise.resolve({ id }) });
     expect(response.status).toBe(200);
     expect(client.auth.mfa.challengeAndVerify).toHaveBeenCalled();
-    expect(client.rpc).toHaveBeenCalledWith("admin_update_subscription", expect.objectContaining({ p_actor_aal: "aal2", p_actor_session_issued_at: "2026-10-02T12:00:00.000Z", p_totp_verified_at: "2026-10-03T12:00:00.000Z" }));
+    expect(client.rpc).toHaveBeenCalledWith("billing_v2_admin_update_subscription", expect.objectContaining({ p_actor_aal: "aal2", p_actor_session_issued_at: "2026-10-02T12:00:00.000Z", p_totp_verified_at: "2026-10-03T12:00:00.000Z" }));
+    expect(client.rpc).toHaveBeenCalledWith("billing_retry_schema_ready");
+    expect(client.rpc).not.toHaveBeenCalledWith("admin_update_subscription", expect.anything());
   });
   it("permits AAL1 onboarding in cutover but never mutations", async () => {
     const client = fixture({ aal: "aal1" });
