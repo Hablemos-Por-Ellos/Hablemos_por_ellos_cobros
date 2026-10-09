@@ -3,8 +3,9 @@
 Implementacion local: 2026-10-08. Corte productivo: 2026-10-09.
 Codigo 2769a11 publicado por `codex/monthly-payment-retry`/dev/main y READY
 en Production; SQL 0.4.0 aplicada con FINAL restaurado/comparado y originales
-intactos. Portal en mantenimiento, sin cargos de prueba. Ingreso actualizado
-y reapertura financiera pendientes; evidencia en `CUTOVER_0.4.0.md`.
+intactos. El titular confirmo el panel y reabrio el portal con un redeploy;
+runtime y inventory verificados, tres workflows activos, sin cargos de prueba.
+Evidencia y limites en `CUTOVER_0.4.0.md` y `REOPENING_0.4.0.md`.
 
 ## Alcance
 
@@ -132,8 +133,9 @@ La entrega local por si sola no autoriza publicacion. QA local esta aprobada
 con alcance limitado. Posteriormente, el 8 de octubre, el titular solicito
 expresamente terminar el corte productivo. FINAL, publicacion y SQL se
 completaron el 9 de octubre con las puertas obligatorias. La reapertura
-financiera requiere una confirmacion posterior independiente y un nuevo
-redeploy del titular; procedimiento en `REOPENING_0.4.0.md`.
+financiera requirio una confirmacion posterior independiente y un nuevo
+redeploy del titular; ambos se completaron y verificaron el 9 de octubre.
+Procedimiento y evidencia en `REOPENING_0.4.0.md`.
 No hay una prueba Sandbox real nueva: su webhook existente apunta a produccion;
 no se enviaran transacciones alli desde el laboratorio.
 Resultados y limites del candidato: `docs/VALIDATION_0.4.0.md`. Las correcciones

@@ -8,7 +8,8 @@ preflight productivo de solo lectura correcto y 66 archivos preparados en Git.
 Monthly/Repository Activity pausados, GitHub cutover/false y cero runs activos.
 FINAL/publicacion/SQL estaban pendientes en ese checkpoint. Se completaron
 el 9 de octubre, con evidencia operativa distinta al final de este documento
-y en CUTOVER_0.4.0.md. Reapertura e ingreso actualizado siguen pendientes.
+y en CUTOVER_0.4.0.md. Reapertura posterior verificada en REOPENING_0.4.0.md;
+ingreso actualizado confirmado por el titular, no reproducido por QA local.
 
 ## Evidencia y limites
 
@@ -137,7 +138,8 @@ La ausencia de alertas runtime no demuestra ausencia de vulnerabilidades.
 4. Explicacion/autorizacion y FINAL: completados el 9 de octubre; copia real
    cifrada/restaurada/comparada, 50 tablas/490 filas y cero diferencias.
 5. Publicacion/migracion productiva: aplicadas y comprobadas en mantenimiento.
-   Reapertura financiera y nuevo ingreso del titular: pendientes de confirmacion.
+   Reapertura verificada despues de la confirmacion separada del titular;
+   primera ejecucion programada posterior y resultados bancarios no probados.
 
 La autorizacion posterior no sustituye escritores pausados/drenados,
 respaldo fresco cifrado/restaurado/comparado y
@@ -167,8 +169,17 @@ Bootstrap sin sesion 403 y APIs financieras invalidas en cutover 503.
 QA independiente aprueba DB/mantenimiento tras inspeccionar codigo/digest y
 proof JSON; no reprodujo cifrado, contenedor ni cloud y no aprueba reapertura.
 
-El login sirve 0.4.0, donar mantiene la redireccion y acceptance rechaza con
-503. No se probaron mutaciones sobre donantes reales ni cargos de prueba.
-Cuentas/factores existentes conservados; confirmacion del ingreso actualizado,
-reapertura y primera ejecucion normal siguen pendientes. Recuperacion y limites
-del laboratorio/backup Auth externo: `CUTOVER_0.4.0.md`.
+Durante el corte, login servia 0.4.0, donar mantenia la redireccion y acceptance
+rechazaba con 503. Cuentas/factores existentes conservados. Posteriormente el
+titular confirmo el panel y autorizo la reapertura: redeploy main/ba11768
+`7A3XJdXDc5ifxMxxxBUHvjgBKF1D` READY, donar/login/acceptance 200 y admin
+anonimo 307 a login. POST donations `{}` devuelve 400 antes de DB, bootstrap
+sin sesion 403 y las seis tablas privadas siguen rechazando GET anonimo 42501.
+GitHub Production active/true y tres workflows active. Inventory `37928759265`
+success en v040: cero vencidos, fallos, reservas, envios y cargos. Los dos
+outstanding legacy son los previamente verificados, no nuevos envios inciertos.
+Keepalive `37928938775` success, endpoint autenticado devuelve ok=true tras
+leer subscriptions; no llama mantenimiento v1 ni modifica historial.
+No se probaron mutaciones sobre donantes reales ni cobros de prueba. Esta
+lectura no acredita aprobaciones futuras ni reproduce Auth/SSR completo.
+Recuperacion y limites del laboratorio/backup Auth externo: `CUTOVER_0.4.0.md`.

@@ -1,10 +1,10 @@
 # Changelog
 
-## 0.4.0 - 2026-10-09 - Production Cutover, Reopening Pending
+## 0.4.0 - 2026-10-09 - Production Migration and Reopening Verified
 
 - Publish code 2769a11 through branch/dev/main. Fictional dev Preview and
   Production deployment 3HtXEsi6bGDz2oPtumDh1a2tvAnc are READY; production
-  remains cutover/false with donations in maintenance and workflows paused.
+  initially remained cutover/false with donations in maintenance and workflows paused.
 - Restore and compare the fresh encrypted FINAL backup before SQL: 50 tables,
   490 rows, original IDs/content/amounts/schema/ACL and Auth/MFA rows preserved,
   zero differences and two private copies. Storage was empty.
@@ -14,8 +14,18 @@
 - Run native inventory and reconcile against v040 with a separate provider
   POST blocker: two existing Wompi transactions checked, zero new charges,
   no operational errors. Existing accounts and credentials were not recreated.
-- Keep real login confirmation and explicit financial reopening as pending
-  gates. See docs/REOPENING_0.4.0.md; no production charge is used as a test.
+- The owner confirmed the updated panel and authorized reopening. Their
+  Production redeploy 7A3XJdXDc5ifxMxxxBUHvjgBKF1D on main/ba11768 is READY;
+  donations, login and acceptance return 200, while private admin redirects
+  anonymous visitors to login. Invalid donation payloads return 400 without
+  database writes; anonymous bootstrap returns 403 and private-table reads
+  remain denied. No donor records or payments were changed for testing.
+- Restore existing GitHub Production controls to active/true and enable all
+  three workflows. Inventory run 37928759265 succeeds against schema v040,
+  with no overdue charges, operational failures, reservations or sends.
+  No production charge is used as a test; future bank outcomes remain unknown.
+- Authenticated read-only Keepalive run 37928938775 succeeds with ok=true;
+  no legacy financial maintenance RPC or history cleanup is invoked.
 
 ### Local Implementation - 2026-10-08
 

@@ -1,13 +1,14 @@
 # Panel administrativo: preparacion local
 
-**0.4.0 en Production/mantenimiento (2026-10-09):** registro compacto,
+**0.4.0 en Production/reabierta (2026-10-09):** registro compacto,
 filas moviles, historial y cancelacion confirmada del adicional. Codigo
 2769a11 READY y SQL nueva aplicada despues del FINAL restaurado/comparado,
 con originales y dos cuentas/MFA conservados. La demo sigue ficticia y
-desconectada; no hubo cuentas nuevas ni cobros de prueba. Confirmacion del
-ingreso actualizado y reapertura aparte: `CUTOVER_0.4.0.md` y
+desconectada; no hubo cuentas nuevas ni cobros de prueba. Titular confirmo el
+panel actualizado; reapertura e inventory verificados, workflows activos.
+Evidencia del corte y reapertura: `CUTOVER_0.4.0.md` y
 `REOPENING_0.4.0.md`. La historia 0.3.1 siguiente es un checkpoint anterior.
-Ver `BILLING_RETRY_0.4.0.md` para cambios propuestos y la parada de migracion.
+Ver `BILLING_RETRY_0.4.0.md` para reglas y protecciones del corte ya aplicado.
 
 Version UI 0.3.1, esquema 0.3.0. El procedimiento siguiente explica el laboratorio local; no
 autoriza crear cuentas reales ni habilitar cobros. Codigo y migracion SQL ya

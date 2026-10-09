@@ -1,4 +1,4 @@
-# Corte 0.4.0: migracion aplicada, reapertura pendiente
+# Corte 0.4.0: migracion aplicada y reapertura verificada
 
 Implementacion: 2026-10-08 Colombia. Corte: 2026-10-09.
 Rama `codex/monthly-payment-retry`, publicada por dev/main.
@@ -48,10 +48,10 @@ y corte, ni la confirmacion posterior de reapertura financiera.
   admin_users rechazado con 42501; seis GET y cero datos expuestos.
   Sondas negativas: bootstrap sin sesion 403, donations en cutover 503,
   PATCH de suscripcion invalida en cutover 503. Esto no sustituye MFA real.
-- Runtime: acceptance 503 de mantenimiento, donar redirige a mantenimiento,
-  login 200 con 0.4.0. No demuestra aun una nueva sesion AAL2 del titular;
-  acceso actualizado, reapertura y primera ejecucion financiera siguen pendientes.
-  Procedimiento vigente: `REOPENING_0.4.0.md`.
+- Runtime durante el corte: acceptance 503 de mantenimiento, donar redirige
+  a mantenimiento, login 200 con 0.4.0. Esa observacion no demostraba una
+  nueva sesion AAL2 del titular. El acceso confirmado por el titular y la
+  reapertura posterior se registran en `REOPENING_0.4.0.md`.
 - Copia POST a las 05:45:20.693 UTC, despues de conciliar: 51 tablas/493 filas,
   snapshot consistente, cifrado y segunda copia con hashes coincidentes;
   restauracion de esta copia posterior aun pendiente. No confundirla con el
@@ -64,6 +64,17 @@ Los ensayos ficticios no usaron esta copia ni datos reales como fixtures.
 La copia offline verifica filas Auth/MFA, no la recuperacion independiente del
 servicio Auth, su configuracion externa o llaves de cifrado del proveedor.
 No se cambiaron cuentas, passwords, llaves ni enrolamientos MFA.
+
+## Reapertura posterior al corte
+
+Titular confirmo el panel y guardo active/true/mantenimiento false. Redeploy
+Production `7A3XJdXDc5ifxMxxxBUHvjgBKF1D`, main/ba11768, READY. Donar/login/
+acceptance 200, admin anonimo 307 a login, bootstrap 403 y seis tablas privadas
+sin acceso anonimo. GitHub Production active/true, tres workflows reanudados;
+inventory `37928759265` success, v040 sin fallback, cero vencidos/fallos/envios.
+No se ejecutaron cobros productivos de prueba ni se modificaron donantes para
+validar. La primera ejecucion programada posterior es evidencia futura distinta.
+Los checkpoints anteriores conservan los bloqueos que habia durante FINAL/SQL.
 
 ## Checkpoint de preparacion - 2026-10-08 Colombia
 

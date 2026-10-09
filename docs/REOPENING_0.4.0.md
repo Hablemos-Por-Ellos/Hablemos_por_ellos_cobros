@@ -1,9 +1,43 @@
-# Reapertura 0.4.0 - Confirmacion Pendiente
+# Reapertura 0.4.0 - Verificada el 2026-10-09
 
 2026-10-09 Colombia. SQL ya aplicada y datos originales verificados.
+El titular confirmo el panel actualizado, autorizo la reapertura y guardo los
+controles/redeploy. Las instrucciones siguientes quedan como runbook, no como
+pasos pendientes ni autorizacion para repetir un corte.
 Los pasos de ESCRITURA siguientes no se ejecutan automaticamente por un push.
 Requieren confirmacion explicita del titular y comprobar su ingreso con MFA
 al panel 0.4.0. No recrear cuentas ni enrolar nuevamente Authenticator.
+
+## Evidencia de Reapertura
+
+- Production READY `7A3XJdXDc5ifxMxxxBUHvjgBKF1D`, main/ba11768,
+  creado a las 12:08:45 UTC / 07:08:45 Colombia. Configuracion Vercel guardada
+  por el titular, no por el asistente. No se cambiaron llaves ni Preview.
+- Dominio canonico: donar/login 200, admin sin sesion 307 hacia login y
+  acceptance 200 con ambos enlaces legales HTTPS. No se aceptaron terminos
+  ni se ingresaron tarjetas. POST donations con `{}` devuelve 400 antes del
+  cliente DB; bootstrap anonimo devuelve 403. Sondas negativas, no aportes.
+- Seis tablas privadas rechazan GET anonimo con 42501, cero filas expuestas.
+  Inventory nativo reconoce v040 sin fallback y no contacta Wompi.
+- GitHub Environment Production verificado active/true; Monthly Charges,
+  Keepalive y Refresh Repository Activity verificados active. Inventory manual
+  `37928759265`, main/ba11768, success a las 12:15:07 UTC: due/failed/charged/
+  sent/reserved/retriesDue cero. Los dos outstanding son historicos ya
+  verificados, no dos nuevos cargos inciertos. No se hizo dispatch de charge.
+- Keepalive manual `37928938775`, main/ba11768, success: endpoint autenticado
+  devuelve `{"ok":true}` despues de una lectura a subscriptions. No invoca
+  mantenimiento v1 ni cambia estados, historial o importes.
+- El cron sigue 12:00 UTC / 07:00 Colombia. Esta reapertura fue posterior a
+  la hora nominal del dia 9; no se ejecuto un catch-up financiero manual y
+  no habia cobros vencidos en la lectura. La primera ejecucion programada
+  posterior y su eventual aprobacion bancaria deben comprobarse por separado.
+- La ejecucion inventory avisa de la futura actualizacion de ubuntu-latest
+  y una deprecacion url.parse() de setup-node. No fallaron los pasos; no se
+  alteraron runners ni dependencias dentro de esta reapertura.
+
+Esta evidencia no reproduce todos los flujos Auth ni una nueva operacion
+financiera real. La confirmacion del panel es del titular; no se leyeron sus
+cookies, QR, contrasenas o codigos para validarla.
 
 ## Vercel - Intervencion del Titular
 

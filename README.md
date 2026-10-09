@@ -4,7 +4,7 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
 
 ## Estado actual
 
-- **0.4.0 publicada y migrada en mantenimiento, 2026-10-09 Colombia.** Codigo
+- **0.4.0 publicada, migrada y reabierta, 2026-10-09 Colombia.** Codigo
   `2769a11` promovido por rama/dev/main; Preview ficticia y Production READY.
   Admin compacto y un adicional por ciclo tras fondos insuficientes verificados,
   solo con consentimiento comprobable; no se agregan reintentos a historicos.
@@ -14,16 +14,20 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
   independiente verifica marcador, permisos y contenido original intacto.
   Inventory v040 y conciliacion de dos transacciones existentes correctos,
   cero cargos enviados. Cuentas y MFA existentes conservados, sin invitaciones.
-  Donar sigue en mantenimiento; Production cutover/false y los tres workflows
-  pausados. Reapertura requiere confirmar acceso al panel y autorizacion del
-  titular, seguida de redeploy con controles activos. Publicar no abre cobros.
+  Titular confirmo el panel actualizado y autorizo la reapertura; su redeploy
+  Production `7A3XJdXDc5ifxMxxxBUHvjgBKF1D`, main/ba11768, quedo READY.
+  Donar/login/acceptance responden 200; admin sin sesion redirige al login.
+  Production active/true, mantenimiento false; GitHub Production active/true
+  y los tres workflows habilitados. Inventory `37928759265` paso sobre main:
+  esquema v040, cero vencidos, fallos, reservas, envios y cargos. No se ejecuto
+  charge de prueba; una lectura correcta no garantiza aprobaciones futuras.
   Alcance, contratos y parada obligatoria: `docs/BILLING_RETRY_0.4.0.md`.
   Evidencia local y limites: `docs/VALIDATION_0.4.0.md`; QA local aprobada
   con alcance limitado tras reproduccion independiente en aislamiento OS.
   Corte exacto y recuperacion: `docs/CUTOVER_0.4.0.md`; riesgos residuales de
   dependencias: `docs/DEPENDENCIES_0.4.0.md`.
   Estado/evidencia de corte: `docs/CUTOVER_0.4.0.md`.
-  Reapertura pendiente: `docs/REOPENING_0.4.0.md`.
+  Reapertura verificada y recuperacion: `docs/REOPENING_0.4.0.md`.
 - Ajuste `0.3.1`: Mensual/Unico visibles y filtrables en el admin, incluidos
   los aportes unicos de consulta; sin modificar datos ni tablas. Los contadores
   recurrentes conservan su alcance mensual. Codigo f45b007 publicado por
