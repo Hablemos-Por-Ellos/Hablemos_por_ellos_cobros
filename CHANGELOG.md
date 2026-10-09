@@ -1,6 +1,23 @@
 # Changelog
 
-## 0.4.0 - 2026-10-08 - Release Candidate, Cutover Preparation
+## 0.4.0 - 2026-10-09 - Production Cutover, Reopening Pending
+
+- Publish code 2769a11 through branch/dev/main. Fictional dev Preview and
+  Production deployment 3HtXEsi6bGDz2oPtumDh1a2tvAnc are READY; production
+  remains cutover/false with donations in maintenance and workflows paused.
+- Restore and compare the fresh encrypted FINAL backup before SQL: 50 tables,
+  490 rows, original IDs/content/amounts/schema/ACL and Auth/MFA rows preserved,
+  zero differences and two private copies. Storage was empty.
+- Apply billing-retry-v0.4.0 at 2026-10-09T05:40:17.068Z after the mandatory
+  chat confirmation. A fresh read-only postflight verifies the exact marker,
+  preservation and financial writer restrictions.
+- Run native inventory and reconcile against v040 with a separate provider
+  POST blocker: two existing Wompi transactions checked, zero new charges,
+  no operational errors. Existing accounts and credentials were not recreated.
+- Keep real login confirmation and explicit financial reopening as pending
+  gates. See docs/REOPENING_0.4.0.md; no production charge is used as a test.
+
+### Local Implementation - 2026-10-08
 
 - Work on `codex/monthly-payment-retry`: compact administrative registry,
   mobile two-level rows and a separate timeline for payments and attempts.
@@ -28,10 +45,11 @@
   production SQL, provider charge or production configuration change is
   authorized by this phase. Production migration requires separate approval,
   a fresh encrypted backup, verified restoration and content comparison.
-- The owner subsequently requested the complete production migration on
+- Historical preparation checkpoint: the owner subsequently requested the complete production migration on
   October 8. Read-only production preflight passed; GitHub charge/activity
   workflows are paused with cutover/false gates and no active runs. Production
-  deployment/migration remain pending verified maintenance and the FINAL backup;
+  deployment/migration were pending maintenance and the FINAL backup at that
+  checkpoint. The production evidence above supersedes that pending state;
   financial reopening still requires a separate owner confirmation.
 
 ## 0.3.1 - 2026-10-04 - Administrative Contribution Types

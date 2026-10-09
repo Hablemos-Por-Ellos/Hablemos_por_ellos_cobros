@@ -1,13 +1,12 @@
 # Panel administrativo: preparacion local
 
-**Candidato 0.4.0 local (2026-10-08):** registro compacto, filas moviles,
-historial de intentos y cancelacion confirmada del adicional. Los datos de la
-demo son ficticios; no hay SQL productivo, nueva cuenta, commit ni publicacion.
-La produccion siguiente descrita es el ultimo checkpoint 0.3.1/esquema 0.3.0,
-no una consulta nueva de esta fase. QA local 0.4.0 aprobada con alcance limitado;
-El titular autorizo posteriormente preparar/publicar el corte; despliegue,
-respaldo productivo FINAL y SQL siguen pendientes, con las puertas de
-`CUTOVER_0.4.0.md`. Reapertura requiere otra confirmacion.
+**0.4.0 en Production/mantenimiento (2026-10-09):** registro compacto,
+filas moviles, historial y cancelacion confirmada del adicional. Codigo
+2769a11 READY y SQL nueva aplicada despues del FINAL restaurado/comparado,
+con originales y dos cuentas/MFA conservados. La demo sigue ficticia y
+desconectada; no hubo cuentas nuevas ni cobros de prueba. Confirmacion del
+ingreso actualizado y reapertura aparte: `CUTOVER_0.4.0.md` y
+`REOPENING_0.4.0.md`. La historia 0.3.1 siguiente es un checkpoint anterior.
 Ver `BILLING_RETRY_0.4.0.md` para cambios propuestos y la parada de migracion.
 
 Version UI 0.3.1, esquema 0.3.0. El procedimiento siguiente explica el laboratorio local; no

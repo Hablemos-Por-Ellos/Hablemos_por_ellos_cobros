@@ -1,11 +1,71 @@
-# Corte 0.4.0: preparacion autorizada, migracion pendiente
+# Corte 0.4.0: migracion aplicada, reapertura pendiente
 
-Fecha: 2026-10-08 Colombia. Rama local `codex/monthly-payment-retry`.
+Implementacion: 2026-10-08 Colombia. Corte: 2026-10-09.
+Rama `codex/monthly-payment-retry`, publicada por dev/main.
 NO ejecutar esta fase por disponer de un build correcto. El plan aprobado y
 una solicitud general de continuar no sustituyen la autorizacion separada de publicacion
 y corte, ni la confirmacion posterior de reapertura financiera.
 
-## Estado operativo - 2026-10-08 Colombia
+## Corte productivo verificado - 2026-10-09 Colombia
+
+- Codigo `2769a11`, rama/dev/main. Preview dev
+  `AMvaV2XxQsqpFRSDrqg8jFff2uTS` READY, solo datos ficticios; Production
+  `3HtXEsi6bGDz2oPtumDh1a2tvAnc` READY y asignada al dominio principal.
+- Titular guardo mantenimiento y redeploy anterior 0.3.1 antes del push.
+  APP_OPERATION_MODE/NEXT_PUBLIC_APP_OPERATION_MODE=cutover, finanzas false,
+  MAINTENANCE_MODE=true. Esta ultima estaba en All Environments; Preview
+  conserva demo/ADMIN_DEMO_MODE=true y no recibe secretos financieros.
+- Monthly Charges, Keepalive y Repository Activity disabled_manually,
+  Production cutover/false y cero runs no terminales durante FINAL/SQL.
+  La URL archivada comprobada redirige al login de Vercel sin dar acceptance.
+- FINAL a las 05:33:35.523 UTC: snapshot unico, 50 tablas/490 filas, dump y
+  manifiesto cifrados, permisos privados, restauracion verificada a las
+  05:39:31.306 UTC y cero diferencias; segunda copia con hashes coincidentes.
+  Comparacion de IDs/contenido/importes, esquema, ACL, Auth/MFA y Storage vacio.
+- Laboratorio offline PG17.6, imagen fijada por digest, red none, UID100,
+  capabilities revocadas, CPU/RAM/PIDs limitados y sin puertos ni host mounts.
+  Docker cp no admite el root RO ni el destino tmpfs de TOC: el laboratorio
+  final uso root escribible y /tmp normal, sin habilitar red ni ampliar acceso
+  al host. plpgsql heredaba al operador bootstrap local; se restauro unicamente
+  su owner supabase_admin en el catalogo LOCAL y se repitio la comparacion
+  completa. No se ajustaron datos ni metadatos productivos para hacerla pasar.
+- Mensaje obligatorio emitido inmediatamente antes de SQL. Aplicador nuevo
+  confirmo MIGRATION_VERIFIED/originalRecordsPreserved; marcador aplicado
+  `2026-10-09T05:40:17.068Z`, digest
+  `dbb0b98ca4d44f0d999d0f7a77b28d9e88fb6d71799e577a0a65491533f3b34d`.
+  Conexion independiente: postflight correcto y originales con cero diferencias.
+  34 donantes, 29 suscripciones, 41 pagos, 87 eventos y dos intentos antes
+  de conciliacion; cero ciclos creados retroactivamente, dos cuentas/dos MFA.
+- Inventory v040: cuatro GET Supabase y dos readiness RPC de solo lectura;
+  charged/sent/failed/schemaUnknown cero, sin compatibilidad legacy ni Wompi.
+  Dos historicos aparecen outstanding porque carecen de la evidencia nueva,
+  no porque haya un cargo nuevo incierto. Reconcile verifica dos GET Wompi y
+  dos RPC de resultados, sin POST al proveedor, sin nuevos cobros ni fallos.
+- Postflight posterior a reconcile vuelve a comparar todos los IDs/contenidos
+  originales: cero diferencias; unicamente dos eventos canonicos nuevos,
+  identificados como verificaciones legacy procesadas. Total eventos 89.
+  Acceso anonimo a donors/subscriptions/payments/payment_attempts/billing_cycles/
+  admin_users rechazado con 42501; seis GET y cero datos expuestos.
+  Sondas negativas: bootstrap sin sesion 403, donations en cutover 503,
+  PATCH de suscripcion invalida en cutover 503. Esto no sustituye MFA real.
+- Runtime: acceptance 503 de mantenimiento, donar redirige a mantenimiento,
+  login 200 con 0.4.0. No demuestra aun una nueva sesion AAL2 del titular;
+  acceso actualizado, reapertura y primera ejecucion financiera siguen pendientes.
+  Procedimiento vigente: `REOPENING_0.4.0.md`.
+- Copia POST a las 05:45:20.693 UTC, despues de conciliar: 51 tablas/493 filas,
+  snapshot consistente, cifrado y segunda copia con hashes coincidentes;
+  restauracion de esta copia posterior aun pendiente. No confundirla con el
+  FINAL previo que SI fue restaurado.
+- QA independiente aprobo cierre DB/mantenimiento, con alcance limitado:
+  inspeccion de codigo/digest y JSON de verificacion identicos, no una
+  reproduccion cloud ni del contenedor/cifrado. Reapertura/MFA no aprobados por QA.
+
+Los ensayos ficticios no usaron esta copia ni datos reales como fixtures.
+La copia offline verifica filas Auth/MFA, no la recuperacion independiente del
+servicio Auth, su configuracion externa o llaves de cifrado del proveedor.
+No se cambiaron cuentas, passwords, llaves ni enrolamientos MFA.
+
+## Checkpoint de preparacion - 2026-10-08 Colombia
 
 El titular cambio explicitamente el objetivo a terminar la migracion en
 produccion y funcionando. Esto autoriza preparar/publicar el corte del plan,

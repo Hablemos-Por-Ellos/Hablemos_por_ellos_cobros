@@ -4,21 +4,26 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
 
 ## Estado actual
 
-- Candidato **0.4.0 en preparacion de corte**, rama `codex/monthly-payment-retry`: admin
-  compacto y un adicional por ciclo tras fondos insuficientes verificados.
-  Version/lock preparados; todavia sin push, deploy ni SQL productivo 0.4.0.
-  El titular autorizo terminar el corte productivo el 8 de octubre. Preflight
-  PostgreSQL de solo lectura correcto; GitHub Monthly Charges y Repository
-  Activity pausados, controles cutover/false y sin ejecuciones pendientes.
-  Configuracion/mantenimiento de Vercel por comprobar con el titular; no se
-  habilitan cobros por publicar. La nueva migracion sigue condicionada al
-  respaldo FINAL restaurado/comparado y a su confirmacion inmediata antes de SQL.
+- **0.4.0 publicada y migrada en mantenimiento, 2026-10-09 Colombia.** Codigo
+  `2769a11` promovido por rama/dev/main; Preview ficticia y Production READY.
+  Admin compacto y un adicional por ciclo tras fondos insuficientes verificados,
+  solo con consentimiento comprobable; no se agregan reintentos a historicos.
+  Respaldo FINAL cifrado de 50 tablas/490 filas restaurado y comparado: cero
+  diferencias, dos copias privadas y mensaje obligatorio antes de SQL.
+  Migracion nueva confirmada a las 00:40 Colombia; postflight desde conexion
+  independiente verifica marcador, permisos y contenido original intacto.
+  Inventory v040 y conciliacion de dos transacciones existentes correctos,
+  cero cargos enviados. Cuentas y MFA existentes conservados, sin invitaciones.
+  Donar sigue en mantenimiento; Production cutover/false y los tres workflows
+  pausados. Reapertura requiere confirmar acceso al panel y autorizacion del
+  titular, seguida de redeploy con controles activos. Publicar no abre cobros.
   Alcance, contratos y parada obligatoria: `docs/BILLING_RETRY_0.4.0.md`.
   Evidencia local y limites: `docs/VALIDATION_0.4.0.md`; QA local aprobada
   con alcance limitado tras reproduccion independiente en aislamiento OS.
   Corte exacto y recuperacion: `docs/CUTOVER_0.4.0.md`; riesgos residuales de
   dependencias: `docs/DEPENDENCIES_0.4.0.md`.
-  Estado/evidencia de corte: `docs/CUTOVER_0.4.0.md`. Aun no desplegado ni migrado.
+  Estado/evidencia de corte: `docs/CUTOVER_0.4.0.md`.
+  Reapertura pendiente: `docs/REOPENING_0.4.0.md`.
 - Ajuste `0.3.1`: Mensual/Unico visibles y filtrables en el admin, incluidos
   los aportes unicos de consulta; sin modificar datos ni tablas. Los contadores
   recurrentes conservan su alcance mensual. Codigo f45b007 publicado por
@@ -26,7 +31,7 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
   0.3.1 y los filtros reales. Validacion: `docs/VALIDATION_0.3.1.md`.
   Reapertura manual: `docs/REOPENING_0.3.1.md`. No abrir cobros con un push:
   las variables de Vercel y GitHub son independientes.
-- Version `0.3.1` publicada en `main` y Production. El titular reabrio el portal
+- Checkpoint anterior: version `0.3.1` publicada en `main` y Production. El titular reabrio el portal
   y reanudo los workflows el 5 de octubre; reapertura e inventory comprobados.
   Verificacion de lectura del 7 de octubre: el job automatico del dia 6 creo un
   cobro, aprobado tambien en Wompi y registrado en Supabase, con siguiente fecha

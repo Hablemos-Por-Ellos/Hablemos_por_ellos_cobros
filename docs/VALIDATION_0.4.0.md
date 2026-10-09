@@ -1,12 +1,14 @@
-# Validacion local 0.4.0
+# Validacion 0.4.0 - Local y Corte Productivo
 
 Fecha: 2026-10-08. Rama: `codex/monthly-payment-retry`. Base: `46ffa2b`.
 Estado de la validacion local: cambios entonces SIN commit, push, release,
 despliegue ni SQL productivo. Produccion quedo fuera de esas pruebas.
-Checkpoint posterior del corte: autorizacion recibida el 8 de octubre;
+Checkpoint historico de preparacion: autorizacion recibida el 8 de octubre;
 preflight productivo de solo lectura correcto y 66 archivos preparados en Git.
 Monthly/Repository Activity pausados, GitHub cutover/false y cero runs activos.
-FINAL, publicacion, SQL y reapertura siguen pendientes segun CUTOVER_0.4.0.md.
+FINAL/publicacion/SQL estaban pendientes en ese checkpoint. Se completaron
+el 9 de octubre, con evidencia operativa distinta al final de este documento
+y en CUTOVER_0.4.0.md. Reapertura e ingreso actualizado siguen pendientes.
 
 ## Evidencia y limites
 
@@ -132,10 +134,10 @@ La ausencia de alertas runtime no demuestra ausencia de vulnerabilidades.
 1. Interfaz local: implementada y ejercitada con datos ficticios.
 2. Reglas locales: implementadas y probadas con reloj/GET/POST ficticios.
 3. SQL/laboratorio: preparados/probados; QA local aprobada con el alcance anterior.
-4. Explicacion/autorizacion: el titular posteriormente solicito expresamente
-   el corte productivo. Preparacion iniciada; respaldo FINAL aun pendiente.
-5. Publicacion/migracion productiva: autorizadas con las condiciones del plan,
-   aun no ejecutadas. Reapertura financiera: requiere confirmacion posterior.
+4. Explicacion/autorizacion y FINAL: completados el 9 de octubre; copia real
+   cifrada/restaurada/comparada, 50 tablas/490 filas y cero diferencias.
+5. Publicacion/migracion productiva: aplicadas y comprobadas en mantenimiento.
+   Reapertura financiera y nuevo ingreso del titular: pendientes de confirmacion.
 
 La autorizacion posterior no sustituye escritores pausados/drenados,
 respaldo fresco cifrado/restaurado/comparado y
@@ -143,3 +145,30 @@ confirmacion explicita aqui inmediatamente antes de SQL. No reutilizar estas
 pruebas ficticias como evidencia de respaldo final, Auth/RLS real, integracion
 Wompi Sandbox ni cobros productivos. No volver al esquema/codigo anterior a
 ciegas ni restaurar una copia antigua sobre movimientos posteriores.
+
+## Evidencia Operativa Productiva - 2026-10-09
+
+Esta evidencia es posterior y distinta de la QA local anterior. No convierte
+la reproduccion ficticia en una prueba de pagos reales o Auth remoto.
+Codigo 2769a11/0.4.0 READY en Preview dev y Production. FINAL real restaurado
+y comparado antes del mensaje obligatorio y SQL; marcador exacto confirmado
+a las 05:40:17.068 UTC, postflight fresco y originales con cero diferencias.
+
+Job nativo contra PostgREST actual, schema v040 explicito: inventory correcto,
+sin fallback/errores, cuatro GET y dos RPC readiness de solo lectura. Dos
+historicos necesitan verificacion de evidencia nueva; reconcile hizo dos GET
+Wompi y dos RPC de resultados, reconciled=2, failed=0, charged=0 y sent=0.
+Una barrera HTTP independiente impidio POST al proveedor y reservas/envios.
+No habia originales vencidos, ciclos nuevos ni recibos v1 por conciliar.
+Postflight posterior a reconcile: todos los registros originales con cero
+diferencias, unicamente dos eventos canonicos nuevos de verificacion; total89.
+Seis GET anonimos a tablas privadas rechazados con 42501, cero filas expuestas.
+Bootstrap sin sesion 403 y APIs financieras invalidas en cutover 503.
+QA independiente aprueba DB/mantenimiento tras inspeccionar codigo/digest y
+proof JSON; no reprodujo cifrado, contenedor ni cloud y no aprueba reapertura.
+
+El login sirve 0.4.0, donar mantiene la redireccion y acceptance rechaza con
+503. No se probaron mutaciones sobre donantes reales ni cargos de prueba.
+Cuentas/factores existentes conservados; confirmacion del ingreso actualizado,
+reapertura y primera ejecucion normal siguen pendientes. Recuperacion y limites
+del laboratorio/backup Auth externo: `CUTOVER_0.4.0.md`.

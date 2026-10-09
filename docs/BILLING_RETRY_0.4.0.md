@@ -1,9 +1,10 @@
 # Reintentos y admin 0.4.0
 
-Fecha: 2026-10-08. Estado: candidato LOCAL en `codex/monthly-payment-retry`,
-sin commit, push, despliegue ni SQL productivo. Ultimo checkpoint productivo:
-0.3.1 con esquema 0.3.0; no se consulto en esta
-fase local ni se cambio su configuracion.
+Implementacion local: 2026-10-08. Corte productivo: 2026-10-09.
+Codigo 2769a11 publicado por `codex/monthly-payment-retry`/dev/main y READY
+en Production; SQL 0.4.0 aplicada con FINAL restaurado/comparado y originales
+intactos. Portal en mantenimiento, sin cargos de prueba. Ingreso actualizado
+y reapertura financiera pendientes; evidencia en `CUTOVER_0.4.0.md`.
 
 ## Alcance
 
@@ -51,7 +52,7 @@ pero no revierte cancelaciones, bloqueo manual o cambios administrativos.
 Si contradice otra aprobacion, se conserva y se bloquea la automatizacion;
 no se oculta el segundo pago ni se reembolsa automaticamente.
 
-## SQL propuesta, no aplicada en produccion
+## SQL Aplicada en Produccion - 2026-10-09
 
 Nueva migracion: `supabase/migrations/202610080001_billing_retry_cycles.sql`.
 La migracion aplicada de 0.3.0 NO se edita ni se vuelve a ejecutar en produccion.
@@ -129,9 +130,10 @@ Mantenimiento/false produce 503 en la API financiera local.
 
 La entrega local por si sola no autoriza publicacion. QA local esta aprobada
 con alcance limitado. Posteriormente, el 8 de octubre, el titular solicito
-expresamente terminar el corte productivo. La preparacion esta autorizada;
-respaldo FINAL, publicacion/SQL y verificaciones productivas siguen pendientes.
-La reapertura financiera requiere una confirmacion posterior independiente.
+expresamente terminar el corte productivo. FINAL, publicacion y SQL se
+completaron el 9 de octubre con las puertas obligatorias. La reapertura
+financiera requiere una confirmacion posterior independiente y un nuevo
+redeploy del titular; procedimiento en `REOPENING_0.4.0.md`.
 No hay una prueba Sandbox real nueva: su webhook existente apunta a produccion;
 no se enviaran transacciones alli desde el laboratorio.
 Resultados y limites del candidato: `docs/VALIDATION_0.4.0.md`. Las correcciones
