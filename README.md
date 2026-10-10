@@ -9,10 +9,13 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
   0.4.0 existente. No hay migracion nueva; un push no cambia agendas productivas.
   El titular opto por acordar dias estandar en lugar de ampliar calendarios
   legacy; esos guardados auditados siguen pendientes del TOTP del titular.
-  Codigo e2f6baa publicado por rama/dev/main y servido en el dominio canonico;
+  Runtime e2f6baa y checkpoint documental 10f27f0 publicados por rama/dev/main;
   login/donar/acceptance 200 y admin anonimo 307 a login. Sin cambiar llaves,
   variables ni workflows; sin ejecutar cargos de prueba.
   1322 pruebas, lint, TypeScript y build aislado correctos; QA aprueba local.
+  Inventory 38089969318 observo dos calendarios pendientes de MFA/guardado:
+  calendarReviewRequired=2, failed=0, sent=0 y charged=0. Su salida de error
+  es una advertencia esperada, no una certificacion de que esas fechas se arreglaron.
   Alcance: `docs/BILLING_RECOVERY_0.4.1.md`; pruebas: `docs/VALIDATION_0.4.1.md`;
   comprobacion de despliegue y agendas pendientes: `docs/RELEASE_0.4.1.md`.
 - **0.4.0 publicada, migrada y reabierta, 2026-10-09 Colombia.** Codigo

@@ -37,8 +37,19 @@ Vercel team/project hablemos-por-ellos-projects/hablemos-por-ellos-cobros.
   No payment, card tokenization, provider POST or donor mutation was used as a
   test. This proves the observed routes/revision, not future bank approvals or
   all authenticated sessions. Full Vercel runtime log inspection was unavailable.
-- Read-only inventory against the final main commit: pending; never run charge
-  to test this release.
+- Documentation checkpoint 10f27f0 also reached Production:
+  FfueH55zCndxS4hX7FXY3nsjzder/GitHub deployment 6987492754, successful at
+  2026-10-10T22:02:53Z. Canonical probes repeated 200/200/200 and admin 307;
+  the production footer matched 0.4.1 and 10f27f0. This is the Vercel deployment,
+  not the separate GitHub environment deployment created by the inventory job.
+- Read-only inventory 38089969318 ran on main/10f27f0. It exited with
+  BILLING_JOB_CALENDAR_REVIEW_REQUIRED, as expected while the two approved
+  schedule saves await TOTP. Observed schema v040 with no fallback,
+  calendarReviewRequired=2, legacyCalendars=2, due=1, blocked=2,
+  inventoryStatus=billing_configuration_review. Operational failures, receipts,
+  reserves, provider sends and charges were all zero. This warning confirms
+  detection, not repaired calendars or successful payments. A clean follow-up
+  inventory remains pending after actual audited saves. Never run charge to test.
 - Two audited calendar saves: NOT SAVED. Both existing production-admin dialogs
   were prepared and remain open; the owner must enter their current Authenticator
   code and confirm each change. No TOTP was read or requested in chat. Date
@@ -48,10 +59,11 @@ Vercel team/project hablemos-por-ellos-projects/hablemos-por-ellos-cobros.
   Use existing admin/session/MFA/recent TOTP/version/atomic audit; do not bypass
   the controls with service-role SQL. Public docs must not contain donor IDs,
   names, contact details, TOTP codes or payment identifiers.
-- Release tag/notes and final documentation: in progress. A documentation-only
-  checkpoint records this verification; its deployment/short commit should be
-  checked again before closing publication. Runtime source is unchanged from
-  e2f6baa. Tag/release v0.4.1 identifies the final documented checkpoint.
+- Annotated tag/release v0.4.1 was created on documentation checkpoint 10f27f0;
+  retain that immutable tag. Subsequent documentation-only checkpoints do not
+  change runtime source from e2f6baa or database schema. Their final active
+  revision/deployment checks are recorded in the GitHub release notes and the
+  private project note, avoiding a self-referential deployment metadata commit.
 
 ## Recovery
 
