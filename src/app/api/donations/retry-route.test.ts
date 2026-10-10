@@ -24,7 +24,9 @@ beforeEach(() => {
   vi.stubEnv("APP_OPERATION_MODE", "active"); vi.stubEnv("FINANCIAL_OPERATIONS_ENABLED", "true");
   vi.stubEnv("CHECKOUT_TOKEN_PEPPER", "fixture-private-pepper-at-least-32-chars");
   rows = { donors: { id: "donor-fixture" }, checkout_intents: { id: "checkout-fixture", donor_id: "donor-fixture", reference: "HPE-FIXTURE",
-    amount: 30000, currency: "COP", is_recurring: true, environment: "sandbox", state: "checkout", expires_at: "2026-10-08T18:30:00Z" }, payment_attempts: null };
+    amount: 30000, currency: "COP", is_recurring: true, environment: "sandbox", state: "checkout", expires_at: "2026-10-08T18:30:00Z" },
+    subscriptions: { id: "sub-fixture", donor_id: "donor-fixture", reference: "HPE-FIXTURE", amount: 30000,
+      currency: "COP", frequency: "monthly", wompi_payment_source_id: "source-fixture" }, payment_attempts: null };
   writes = [];
   const from = (table: string) => {
     const query: any = { select: () => query, eq: () => query,
@@ -83,7 +85,7 @@ describe("v0.4.0 real HTTP checkout contract (fictitious dependencies only)", ()
     expect(mocks.create).not.toHaveBeenCalled();
   });
   it.each(["reference", "amountInCents", "currency", "paymentSourceId"])("rejects a verified mismatch in %s before application", async (field) => {
-    rows.payment_attempts = { id: "attempt-fixture", state: "pending", wompi_transaction_id: "tx-fixture" };
+    rows.payment_attempts = { id: "attempt-fixture", subscription_id: "sub-fixture", attempt_number: 1, state: "pending", wompi_transaction_id: "tx-fixture" };
     mocks.get.mockResolvedValue({ ...transaction(), [field]: "wrong" });
     expect((await POST(request())).status).toBe(400);
     expect(rpc).not.toHaveBeenCalledWith("billing_v2_apply_result", expect.anything()); expect(mocks.create).not.toHaveBeenCalled();
@@ -111,7 +113,7 @@ describe("v0.4.0 real HTTP checkout contract (fictitious dependencies only)", ()
   it("never resends a POST after a timeout", async () => {
     mocks.create.mockRejectedValue(new Error("timeout"));
     expect((await POST(request())).status).toBe(202);
-    rows.payment_attempts = { id: "attempt-fixture", state: "unknown", wompi_transaction_id: null };
+    rows.payment_attempts = { id: "attempt-fixture", subscription_id: "sub-fixture", attempt_number: 1, state: "unknown", wompi_transaction_id: null };
     expect((await POST(request())).status).toBe(202); expect(mocks.create).toHaveBeenCalledTimes(1);
   });
   it("a lost barrier response is uncertain even when this process never invoked a POST", async () => {
@@ -125,13 +127,14 @@ describe("v0.4.0 real HTTP checkout contract (fictitious dependencies only)", ()
     expect(mocks.create).not.toHaveBeenCalled();
   });
   it("repeated known transactions perform GET only, even after checkout expiry", async () => {
-    rows.payment_attempts = { id: "attempt-fixture", state: "pending", wompi_transaction_id: "tx-fixture" };
+    rows.payment_attempts = { id: "attempt-fixture", subscription_id: "sub-fixture", attempt_number: 1, state: "pending", wompi_transaction_id: "tx-fixture" };
     rows.checkout_intents.expires_at = "2026-10-08T17:00:00Z";
     expect((await POST(request())).status).toBe(200); expect(mocks.create).not.toHaveBeenCalled(); expect(mocks.get).toHaveBeenCalledTimes(1);
   });
   it("one-time widget results never create a server financial POST", async () => {
     rows.checkout_intents.is_recurring = false;
-    rows.payment_attempts = { id: "attempt-fixture", state: "prepared", wompi_transaction_id: null };
+    rows.subscriptions.frequency = "one_time";
+    rows.payment_attempts = { id: "attempt-fixture", subscription_id: "sub-fixture", attempt_number: 1, state: "prepared", wompi_transaction_id: null };
     const input = { ...body(), donor: { ...donor, isRecurring: false }, wompi: { reference: "HPE-FIXTURE", transactionId: "tx-fixture" } };
     expect((await POST(request(input))).status).toBe(200); expect(mocks.create).not.toHaveBeenCalled();
   });

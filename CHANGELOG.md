@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.1 - 2026-10-10 - Payment Recovery Patch (Release Authorized)
+
+- Preserve checkout recovery after a previously submitted payment when provider
+  verification, database reads or result recording fail; do not invite a second
+  checkout or expose an unverified browser transaction claim.
+- Route legacy confirmation through the existing verified legacy result bridge,
+  without granting retries, changing history or modifying database functions.
+- Report unsupported active monthly calendars in read-only inventory; a green
+  inventory must not hide missing preferred days or invalid next dates.
+- Keep the existing 0.4.0 schema, financial barriers and supported days unchanged.
+  The owner chose standard-day rescheduling instead of a legacy-calendar migration.
+  Production schedules are not changed by this patch.
+- Owner explicitly authorized commit/push/publication and two audited calendar
+  updates. Publication is in progress, not yet verified deployed. No schema SQL,
+  credential rotation, real test charge or workflow/settings change is included.
+- Branch `codex/legacy-billing-compatibility`; validation and remaining risks:
+  `docs/VALIDATION_0.4.1.md`. Release evidence: `docs/RELEASE_0.4.1.md`.
+
 ## 0.4.0 - 2026-10-09 - Production Migration and Reopening Verified
 
 - Publish code 2769a11 through branch/dev/main. Fictional dev Preview and

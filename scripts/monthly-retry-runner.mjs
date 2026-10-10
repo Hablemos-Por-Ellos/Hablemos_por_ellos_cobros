@@ -112,12 +112,19 @@ function needsReconciliation(attempt, cycle) {
   return !attempt.verified_finalized_at || (cycle?.state === "retry_wait" && attempt.attempt_number === 1);
 }
 
+function calendarRequiresReview(subscription) {
+  return !PREFERRED_DAYS.has(subscription.preferred_payment_day)
+    || typeof subscription.next_payment_date !== "string"
+    || !Number.isFinite(Date.parse(subscription.next_payment_date));
+}
+
 export async function runMonthlyRetryCharges({ mode, supabase, env = process.env, logger = console,
   getTransaction, getPaymentSource, prepareTransaction, clock = () => new Date() } = {}) {
   assertBillingJobRuntime(mode, env);
   const stats = { mode, due: 0, outstanding: 0, payments: 0, cycles: 0, retryQueued: 0, retriesDue: 0,
     originalsReserved: 0, retriesReserved: 0, sent: 0, approved: 0, charged: 0,
-    reconciled: 0, repaired: 0, skippedPending: 0, blocked: 0, noIds: 0, schemaUnknown: 0, failed: 0 };
+    reconciled: 0, repaired: 0, skippedPending: 0, blocked: 0, noIds: 0, schemaUnknown: 0, failed: 0,
+    calendarReviewRequired: 0, legacyCalendars: 0 };
   const log = (action) => logger.log(`Monthly billing v040 action=${action}`);
   const fail = (action) => { stats.failed += 1; stats.blocked += 1; log(action); };
   const check = (operation = mode) => assertBillingJobRuntime(operation, env);
@@ -141,7 +148,7 @@ export async function runMonthlyRetryCharges({ mode, supabase, env = process.env
     cycles = await readPages(() => supabase.from("billing_cycles").select("*"));
     attempts = await readPages(() => supabase.from("payment_attempts").select("*"));
     subscriptions = await readPages(() => supabase.from("subscriptions")
-      .select("id,donor_id,reference,frequency,status,billing_version,next_payment_date"));
+      .select("id,donor_id,reference,frequency,status,billing_version,next_payment_date,preferred_payment_day"));
     payments = await readPages(() => supabase.from("payments")
       .select("id,subscription_id,payment_attempt_id,wompi_transaction_id,reference,amount,currency,status,approved_at,provider_effective_at,billing_review_required"));
   } catch {
@@ -150,6 +157,9 @@ export async function runMonthlyRetryCharges({ mode, supabase, env = process.env
   }
   const cycleById = new Map(cycles.map((row) => [row.id, row]));
   const subscriptionById = new Map(subscriptions.map((row) => [row.id, row]));
+  const activeMonthly = subscriptions.filter((row) => row.status === "active" && row.frequency === "monthly");
+  stats.calendarReviewRequired = activeMonthly.filter(calendarRequiresReview).length;
+  stats.legacyCalendars = activeMonthly.filter((row) => row.preferred_payment_day == null).length;
   const due = subscriptions.filter((row) => row.status === "active" && row.frequency === "monthly"
     && typeof row.next_payment_date === "string" && Number.isFinite(Date.parse(row.next_payment_date))
     && Date.parse(row.next_payment_date) <= now.getTime());
@@ -167,7 +177,8 @@ export async function runMonthlyRetryCharges({ mode, supabase, env = process.env
   if (mode === "inventory") {
     stats.noIds = outstanding.filter((row) => !row.wompi_transaction_id).length
       + unresolvedPayments.filter((row) => !row.wompi_transaction_id).length;
-    stats.blocked = stats.noIds;
+    stats.blocked = stats.noIds + stats.calendarReviewRequired;
+    if (stats.calendarReviewRequired > 0) log("calendar_review_required");
     log("read_only_inventory");
     return stats;
   }

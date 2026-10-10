@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { subscriptionPayloadSchema } from "@/lib/schemas";
 import { getServiceSupabaseClient } from "@/lib/supabase-server";
 import { financialOperationsEnabled } from "@/lib/operation-mode";
-import { applyBillingResult, billingRetrySchemaReady, canStartAuthorizedSend } from "@/lib/billing-v2";
+import { applyBillingResult, billingRetrySchemaReady, canStartAuthorizedSend, verifiedBillingTransaction } from "@/lib/billing-v2";
 import { createCheckoutToken, createDonationReference, hashCheckoutToken, requestKeyHash } from "@/lib/checkout-security";
 import { createWompiIntegritySignature, createWompiPaymentSource, createWompiTransaction,
   getWompiAcceptance, getWompiTransaction, isWompiPaymentSourceAvailable } from "@/lib/wompi-server";
 import { WOMPI_ENV } from "@/lib/wompi";
+import { getVerifiedWompiEffectiveDate } from "@/lib/wompi-webhook";
 
 type Client = NonNullable<ReturnType<typeof getServiceSupabaseClient>>;
 
@@ -42,11 +43,15 @@ export async function POST(request: Request) {
   const { stage, donor, amount, paymentMethod, checkoutToken, wompi } = input.data;
   let dispatchedAttempt: string | null = null;
   let transactionId: string | null = null;
+  let needsReconciliation = stage === "confirm";
+  const reconciliationResponse = () => NextResponse.json({ status: "payment_pending", code: "reconciliation_required",
+    message: "El intento esta en conciliacion. No inicies otro cobro.", ...(transactionId ? { transactionId } : {}) }, { status: 202 });
   try {
     const { data: allowed, error: rateError } = await client.rpc("consume_api_rate_limit", {
       p_scope: `donation_${stage}`, p_key_hash: requestKeyHash(request), p_limit: stage === "draft" ? 30 : 10, p_window_seconds: 600,
     });
     if (rateError || allowed !== true) return NextResponse.json({ message: "Demasiados intentos. Espera unos minutos." }, { status: 429 });
+    needsReconciliation = false;
     if (stage === "draft") {
       const id = await donorId(client, donor);
       const reference = createDonationReference();
@@ -66,26 +71,67 @@ export async function POST(request: Request) {
         acceptancePermalink: acceptance.acceptancePermalink, personalDataAuthPermalink: acceptance.personalDataAuthPermalink } });
     }
     if (!checkoutToken || !wompi?.reference || !paymentMethod) throw new Error("CHECKOUT_INVALID");
+    // A failed lookup cannot establish that this checkout has never sent a payment.
+    needsReconciliation = stage === "confirm";
     const { data: intent, error: intentError } = await client.from("checkout_intents")
       .select("id,donor_id,reference,amount,currency,is_recurring,environment,state,expires_at,payment_method_type")
       .eq("secret_hash", hashCheckoutToken(checkoutToken)).eq("reference", wompi.reference).maybeSingle();
-    if (intentError || !intent || intent.environment !== WOMPI_ENV || intent.amount !== amount
+    if (intentError) throw new Error("CHECKOUT_QUERY_FAILED");
+    needsReconciliation = false;
+    if (!intent || intent.environment !== WOMPI_ENV || intent.amount !== amount
       || intent.is_recurring !== donor.isRecurring || intent.currency !== "COP"
       || (intent.payment_method_type && intent.payment_method_type !== paymentMethod)) throw new Error("CHECKOUT_INVALID");
-    const subscription = await rpc(client, "billing_v2_prepare_subscription", { p_checkout_id: intent.id, p_payment_method: paymentMethod });
     if (stage === "checkout") {
+      const subscription = await rpc(client, "billing_v2_prepare_subscription", { p_checkout_id: intent.id, p_payment_method: paymentMethod });
       if (Date.parse(intent.expires_at) <= Date.now()) throw new Error("CHECKOUT_EXPIRED");
       if (!intent.is_recurring) await rpc(client, "billing_v2_reserve_initial", { p_checkout_id: intent.id, p_subscription_id: subscription.id });
       return NextResponse.json({ status: "checkout_started", reference: intent.reference });
     }
+    needsReconciliation = true;
     const { data: existing, error: attemptError } = await client.from("payment_attempts")
-      .select("id,state,wompi_transaction_id").eq("checkout_intent_id", intent.id).maybeSingle();
+      .select("id,subscription_id,state,wompi_transaction_id,attempt_number").eq("checkout_intent_id", intent.id).maybeSingle();
     if (attemptError) throw new Error("ATTEMPT_QUERY_FAILED");
-    const respond = async (attemptId: string, id: string) => {
+    needsReconciliation = Boolean(wompi.transactionId);
+    if (existing?.wompi_transaction_id) {
+      needsReconciliation = true;
+      transactionId = existing.wompi_transaction_id;
+    }
+    if (existing && ["dispatching", "unknown", "pending"].includes(existing.state)) needsReconciliation = true;
+    const respond = async (attemptId: string, id: string, attemptNumber: number | null,
+      preparedSubscription?: { id: string; wompi_payment_source_id: string | null }) => {
+      needsReconciliation = true;
       const tx = await getWompiTransaction(id);
-      if (tx.id !== id || tx.reference !== intent.reference || tx.amountInCents !== intent.amount * 100 || tx.currency !== intent.currency
-        || (intent.is_recurring && tx.paymentSourceId !== subscription.wompi_payment_source_id)) throw new Error("WOMPI_MISMATCH");
-      const result = await applyBillingResult(client, attemptId, tx);
+      const mismatchResponse = () => {
+        if (dispatchedAttempt) throw new Error("WOMPI_MISMATCH");
+        return NextResponse.json({ code: "transaction_mismatch", message: "No pudimos vincular la transaccion a este checkout." }, { status: 400 });
+      };
+      if (tx.id !== id || tx.reference !== intent.reference || tx.amountInCents !== intent.amount * 100 || tx.currency !== intent.currency) return mismatchResponse();
+      let subscription = preparedSubscription;
+      if (!subscription) {
+        if (!existing?.subscription_id) throw new Error("CHECKOUT_SUBSCRIPTION_MISMATCH");
+        const { data: stored, error } = await client.from("subscriptions")
+          .select("id,donor_id,reference,currency,frequency,wompi_payment_source_id")
+          .eq("id", existing.subscription_id).maybeSingle();
+        if (error || !stored || stored.id !== existing.subscription_id || stored.reference !== intent.reference || stored.donor_id !== intent.donor_id
+          || stored.currency !== intent.currency
+          || stored.frequency !== (intent.is_recurring ? "monthly" : "one_time")) throw new Error("CHECKOUT_SUBSCRIPTION_MISMATCH");
+        subscription = { id: stored.id, wompi_payment_source_id: stored.wompi_payment_source_id };
+      }
+      if (intent.is_recurring && (!subscription.wompi_payment_source_id || tx.paymentSourceId !== subscription.wompi_payment_source_id)) return mismatchResponse();
+      if (attemptNumber !== null && attemptNumber !== 1 && attemptNumber !== 2) throw new Error("ATTEMPT_PROTOCOL_INVALID");
+      // Explicit NULL is the existing DB legacy protocol, never an inferred v2 ordinal.
+      const result = attemptNumber === null ? await rpc(client, "apply_verified_wompi_event", {
+        p_event_key: `checkout-reconciliation:${attemptId}:${tx.id}:${tx.status}:${tx.finalizedAt ?? ""}`,
+        p_transaction_id: tx.id, p_event_type: "transaction.reconciled", p_reference: tx.reference,
+        p_payment_source_id: tx.paymentSourceId ?? null, p_amount: tx.amountInCents! / 100,
+        p_currency: tx.currency, p_status: tx.status.toLowerCase(),
+        p_effective_at: getVerifiedWompiEffectiveDate({ id: tx.id, finalizedAt: tx.finalizedAt ?? undefined })?.toISOString() ?? null,
+        p_candidate_next_payment: null,
+        p_raw: { environment: WOMPI_ENV, verification_source: "provider_get", source: "server_reconciliation",
+          transaction: verifiedBillingTransaction(tx) },
+      }) : await applyBillingResult(client, attemptId, tx);
+      if (!["processed", "duplicate", "review"].includes(result.result)) throw new Error("BILLING_RESULT_NOT_APPLIED");
+      if (result.result === "review" || result.scheduleProtected === true || result.historicalOnly === true) return reconciliationResponse();
       const approved = tx.status === "approved" && result.result !== "review";
       const retryQueued = result.retryQueued === true;
       return NextResponse.json({ status: approved ? "subscription_created" : retryQueued || ["approved", "pending"].includes(tx.status) ? "payment_pending" : "payment_failed",
@@ -94,18 +140,19 @@ export async function POST(request: Request) {
           : !approved && tx.status !== "pending" ? { message: "No se aprobo el pago. No se enviara otro cobro desde este checkout." } : {}) },
       { status: approved ? 200 : retryQueued || ["approved", "pending"].includes(tx.status) ? 202 : 402 });
     };
-    if (existing?.wompi_transaction_id) return await respond(existing.id, existing.wompi_transaction_id);
-    if (existing && ["dispatching", "unknown", "pending"].includes(existing.state)) {
-      if (!wompi.transactionId) return NextResponse.json({ status: "payment_pending", message: "El mismo intento esta en conciliacion; no se enviara otro." }, { status: 202 });
-      return await respond(existing.id, wompi.transactionId);
+    if (existing?.wompi_transaction_id) return await respond(existing.id, existing.wompi_transaction_id, existing.attempt_number);
+    if (wompi.transactionId) {
+      if (!existing?.id) return reconciliationResponse();
+      // Browser/widget claims allow verified recovery only, never a second send.
+      return await respond(existing.id, wompi.transactionId, existing.attempt_number);
     }
+    if (needsReconciliation) return reconciliationResponse();
     if (!intent.is_recurring) {
-      if (!existing?.id || !wompi.transactionId) throw new Error("TRANSACTION_REQUIRED");
-      // Widget payment: GET and atomic recording only; never another POST.
-      return await respond(existing.id, wompi.transactionId);
+      throw new Error("TRANSACTION_REQUIRED");
     }
     if (paymentMethod !== "card" || Date.parse(intent.expires_at) <= Date.now()) throw new Error("CHECKOUT_EXPIRED");
     if (!["draft", "checkout"].includes(intent.state) || (existing && existing.state !== "prepared")) throw new Error("CHECKOUT_STATE_INVALID");
+    const subscription = await rpc(client, "billing_v2_prepare_subscription", { p_checkout_id: intent.id, p_payment_method: paymentMethod });
     let sourceId = subscription.wompi_payment_source_id;
     if (!sourceId) {
       if (!wompi.cardToken) throw new Error("CARD_TOKEN_REQUIRED");
@@ -147,16 +194,15 @@ export async function POST(request: Request) {
       } });
     transactionId = tx.id;
     await rpc(client, "billing_v2_record_dispatch", { p_attempt_id: attemptId, p_transaction_id: tx.id, p_status: tx.status });
-    return await respond(attemptId, tx.id);
+    return await respond(attemptId, tx.id, 1, subscription);
   } catch {
     if (dispatchedAttempt) {
       try {
         if (transactionId) await rpc(client, "billing_v2_record_dispatch", { p_attempt_id: dispatchedAttempt, p_transaction_id: transactionId, p_status: "pending" });
         else await rpc(client, "billing_v2_mark_uncertain", { p_attempt_id: dispatchedAttempt });
       } catch { console.error("donations_api_error code=UNCERTAIN_RESULT_PERSISTENCE_FAILED"); }
-      return NextResponse.json({ status: "payment_pending", code: "reconciliation_required",
-        message: "El intento esta en conciliacion. No inicies otro cobro.", ...(transactionId ? { transactionId } : {}) }, { status: 202 });
     }
+    if (needsReconciliation || dispatchedAttempt) return reconciliationResponse();
     console.error("donations_api_error code=CHECKOUT_OPERATION_FAILED");
     return NextResponse.json({ code: "checkout_restart_required", message: "No pudimos completar este checkout. Regresa al primer paso o contacta a la fundacion." }, { status: 400 });
   }

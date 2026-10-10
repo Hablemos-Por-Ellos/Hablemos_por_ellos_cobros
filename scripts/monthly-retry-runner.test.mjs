@@ -7,7 +7,7 @@ const env = { APP_OPERATION_MODE: "active", FINANCIAL_OPERATIONS_ENABLED: "true"
   SUPABASE_URL: "http://127.0.0.1:54321", WOMPI_ENV: "sandbox" };
 const at = "2026-10-09T12:00:00.000Z";
 const subscription = { id: "sub-fixture", donor_id: "donor-fixture", frequency: "monthly", status: "active",
-  billing_version: 0, next_payment_date: "2026-10-09T12:00:00Z" };
+  billing_version: 0, next_payment_date: "2026-10-09T12:00:00Z", preferred_payment_day: 6 };
 const reservation = { result: "reserved", attemptId: "attempt-fixture", cycleId: "cycle-fixture",
   subscriptionId: subscription.id, frequency: "monthly", attemptNumber: 1,
   amount: 30000, currency: "COP", reference: "fixture-original", paymentSourceId: "source-fixture",

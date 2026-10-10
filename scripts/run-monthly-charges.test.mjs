@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { main } from "./run-monthly-charges.mjs";
+import { logBillingJobError } from "./billing-job-mode.mjs";
 
 const local = { APP_OPERATION_MODE: "active", FINANCIAL_OPERATIONS_ENABLED: "true",
   SUPABASE_URL: "http://127.0.0.1:54321", SUPABASE_SERVICE_ROLE_KEY: "fixture-local-key",
@@ -330,6 +331,94 @@ describe("durable receipts before monthly processing", () => {
       } });
     expect(fetchImpl).toHaveBeenCalledOnce();
     expect(fetchImpl.mock.calls[0][0]).toBe("https://sandbox.wompi.co/v1/merchants/info");
+  });
+});
+
+describe("monthly CLI calendar review", () => {
+  const inventoryEnv = { SUPABASE_URL: local.SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY: "fixture-local-key",
+    APP_OPERATION_MODE: "cutover", FINANCIAL_OPERATIONS_ENABLED: "false" };
+  const noNetwork = () => vi.fn(() => { throw new Error("Unexpected network call"); });
+  const readSummary = (logger) => JSON.parse(logger.log.mock.calls.at(-1)[0].slice("Monthly billing complete ".length));
+
+  it("v040 inventory reports two calendar reviews and rejects with a sanitized error without financial calls", async () => {
+    const client = { rpc: vi.fn().mockResolvedValue({ data: true, error: null }), from: vi.fn() };
+    const fetchImpl = noNetwork();
+    const reconcileReceipts = vi.fn(() => { throw new Error("Unexpected receipt reconciliation"); });
+    const retryRunner = vi.fn().mockResolvedValue({ mode: "inventory", calendarReviewRequired: 2,
+      legacyCalendars: 2, schemaUnknown: 1, message: "opaque-fixture", subscriptions: ["private-fixture"] });
+    const logger = silent();
+    const execution = main({ argv: ["--mode=inventory", "--schema=v040"], env: inventoryEnv,
+      clientFactory: () => client, fetchImpl, reconcileReceipts, retryRunner, logger });
+    await expect(execution).rejects.toMatchObject({ message: "BILLING_JOB_CALENDAR_REVIEW_REQUIRED" });
+    await execution.catch((error) => logBillingJobError(logger, error));
+    expect(logger.error).toHaveBeenCalledExactlyOnceWith("Monthly billing failed code=BILLING_JOB_CALENDAR_REVIEW_REQUIRED");
+    expect(readSummary(logger)).toMatchObject({ mode: "inventory", schema: "v040", runnerMode: "inventory",
+      inventoryStatus: "billing_configuration_review", calendarReviewRequired: 2, legacyCalendars: 2,
+      schemaUnknown: 1, charged: 0, sent: 0, approved: 0, payments: 0, repaired: 0 });
+    expect(JSON.stringify(logger.log.mock.calls)).not.toContain("opaque-fixture");
+    expect(JSON.stringify(logger.log.mock.calls)).not.toContain("private-fixture");
+    expect(retryRunner).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ mode: "inventory",
+      getTransaction: undefined, getPaymentSource: undefined, prepareTransaction: undefined, createTransaction: undefined }));
+    expect(client.rpc).toHaveBeenCalledExactlyOnceWith("billing_retry_schema_ready");
+    expect(client.from).not.toHaveBeenCalled();
+    expect(reconcileReceipts).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it.each([0, 1])("v040 inventory with zero reviews succeeds independently of legacy count %i", async (legacyCalendars) => {
+    const logger = silent();
+    const fetchImpl = noNetwork();
+    const client = { rpc: vi.fn().mockResolvedValue({ data: true, error: null }) };
+    const reconcileReceipts = vi.fn();
+    const retryRunner = vi.fn().mockResolvedValue({ calendarReviewRequired: 0, legacyCalendars });
+    const stats = await main({ argv: ["--mode=inventory", "--schema=v040"], env: inventoryEnv,
+      clientFactory: () => client, retryRunner, fetchImpl, reconcileReceipts, logger });
+    expect(stats).toMatchObject({ calendarReviewRequired: 0, legacyCalendars });
+    expect(readSummary(logger)).toMatchObject({ inventoryStatus: "read_only_observation",
+      calendarReviewRequired: 0, legacyCalendars, charged: 0, sent: 0, approved: 0 });
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(client.rpc).toHaveBeenCalledExactlyOnceWith("billing_retry_schema_ready");
+    expect(reconcileReceipts).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it.each(["v031", "v040"])("inventory defaults absent calendar fields to zero for %s runner statistics", async (schema) => {
+    const logger = silent();
+    const fetchImpl = noNetwork();
+    const client = { rpc: vi.fn().mockResolvedValue({ data: true, error: null }) };
+    const runnerStats = Object.freeze({ schemaUnknown: 1 });
+    const runner = vi.fn().mockResolvedValue(runnerStats);
+    const stats = await main({ argv: ["--mode=inventory", `--schema=${schema}`], env: inventoryEnv,
+      clientFactory: () => client, runner, fetchImpl, logger });
+    expect(stats).toMatchObject({ calendarReviewRequired: 0, legacyCalendars: 0 });
+    expect(readSummary(logger)).toMatchObject({ inventoryStatus: "legacy_incomplete",
+      calendarReviewRequired: 0, legacyCalendars: 0 });
+    expect(runnerStats).toEqual({ schemaUnknown: 1 });
+    expect(client.rpc).toHaveBeenCalledTimes(schema === "v040" ? 1 : 0);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it.each(["failed", "duplicateCheckFailures", "auditFailures"])(
+    "preserves the %s operational barrier ahead of calendar review", async (field) => {
+      const logger = silent();
+      const fetchImpl = noNetwork();
+      const retryRunner = vi.fn().mockResolvedValue({ [field]: 1, calendarReviewRequired: 2, legacyCalendars: 2 });
+      await expect(main({ argv: ["--mode=inventory", "--schema=v040"], env: inventoryEnv,
+        clientFactory: readyClient(), retryRunner, fetchImpl, logger })).rejects.toThrow("BILLING_JOB_OPERATIONAL_FAILURE");
+      expect(readSummary(logger)).toMatchObject({ inventoryStatus: "operational_failure",
+        calendarReviewRequired: 2, legacyCalendars: 2, [field]: 1 });
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+  it.each(["charge", "reconcile"])("does not introduce an inventory-only rejection in %s mode", async (mode) => {
+    const logger = silent();
+    const fetchImpl = noNetwork();
+    const retryRunner = vi.fn().mockResolvedValue({ calendarReviewRequired: 2, legacyCalendars: 2 });
+    const stats = await main({ argv: [`--mode=${mode}`], env: { ...local },
+      clientFactory: readyClient(), retryRunner, reconcileReceipts: emptyReceipts(), fetchImpl, logger });
+    expect(stats).toMatchObject({ mode, calendarReviewRequired: 2, legacyCalendars: 2 });
+    expect(readSummary(logger)).not.toHaveProperty("inventoryStatus");
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
 

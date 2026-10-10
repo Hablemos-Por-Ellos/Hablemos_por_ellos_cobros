@@ -4,6 +4,15 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
 
 ## Estado actual
 
+- **0.4.1 validada; publicacion autorizada, 2026-10-10.** Parche de recuperacion de
+  pagos enviados e inventario de calendarios incompatibles, sobre el esquema
+  0.4.0 existente. No hay migracion nueva; un push no cambia agendas productivas.
+  El titular opto por acordar dias estandar en lugar de ampliar calendarios
+  legacy; esos guardados auditados siguen pendientes de confirmar en el admin.
+  Publicacion por rama/dev/main en curso, sin cambiar llaves ni variables.
+  1322 pruebas, lint, TypeScript y build aislado correctos; QA aprueba local.
+  Alcance: `docs/BILLING_RECOVERY_0.4.1.md`; pruebas: `docs/VALIDATION_0.4.1.md`;
+  comprobacion de despliegue y agendas: `docs/RELEASE_0.4.1.md`.
 - **0.4.0 publicada, migrada y reabierta, 2026-10-09 Colombia.** Codigo
   `2769a11` promovido por rama/dev/main; Preview ficticia y Production READY.
   Admin compacto y un adicional por ciclo tras fondos insuficientes verificados,

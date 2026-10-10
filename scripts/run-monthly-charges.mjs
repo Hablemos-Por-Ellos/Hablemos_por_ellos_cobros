@@ -302,21 +302,28 @@ export async function main({ argv = process.argv.slice(2), env = process.env,
     createTransaction: runnerMode === "charge" ? createTransaction : undefined, logger });
   const stats = { ...runnerStats, mode, schema, runnerMode, receipts, chargesBlockedByReceipts,
     inventoryCompatibility,
+    calendarReviewRequired: Number.isFinite(runnerStats.calendarReviewRequired) ? runnerStats.calendarReviewRequired : 0,
+    legacyCalendars: Number.isFinite(runnerStats.legacyCalendars) ? runnerStats.legacyCalendars : 0,
     schemaUnknown: (Number.isFinite(runnerStats.schemaUnknown) ? runnerStats.schemaUnknown : 0) + (inventoryCompatibility ? 1 : 0),
     blocked: (Number.isFinite(runnerStats.blocked) ? runnerStats.blocked : 0) + receipts.failed + receipts.review };
   const summary = { mode, schema, runnerMode, receipts, chargesBlockedByReceipts, inventoryCompatibility };
   for (const field of ["due", "outstanding", "payments", "charged", "skippedPending", "reconciled",
     "blocked", "noIds", "schemaUnknown", "failed", "duplicateCheckFailures", "auditFailures", "sent", "approved",
-    "cycles", "retryQueued", "retriesDue", "originalsReserved", "retriesReserved", "repaired"]) {
+    "cycles", "retryQueued", "retriesDue", "originalsReserved", "retriesReserved", "repaired",
+    "calendarReviewRequired", "legacyCalendars"]) {
     summary[field] = Number.isFinite(stats[field]) ? stats[field] : 0;
   }
   if (mode === "inventory") {
     summary.inventoryStatus = summary.failed > 0 || summary.duplicateCheckFailures > 0 || summary.auditFailures > 0
-      ? "operational_failure" : summary.schemaUnknown > 0 ? "legacy_incomplete" : "read_only_observation";
+      ? "operational_failure" : summary.calendarReviewRequired > 0 ? "billing_configuration_review"
+        : summary.schemaUnknown > 0 ? "legacy_incomplete" : "read_only_observation";
   }
   logger.log("Monthly billing complete " + JSON.stringify(summary));
   if (chargesBlockedByReceipts || summary.failed > 0 || summary.duplicateCheckFailures > 0 || summary.auditFailures > 0) {
     throw new Error("BILLING_JOB_OPERATIONAL_FAILURE");
+  }
+  if (mode === "inventory" && summary.calendarReviewRequired > 0) {
+    throw new Error("BILLING_JOB_CALENDAR_REVIEW_REQUIRED");
   }
   return stats;
 }
