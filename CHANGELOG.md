@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.1 - 2026-10-10 - Payment Recovery Patch (Release Authorized)
+## 0.4.1 - 2026-10-10 - Payment Recovery Patch (Published)
 
 - Preserve checkout recovery after a previously submitted payment when provider
   verification, database reads or result recording fail; do not invite a second
@@ -13,7 +13,9 @@
   The owner chose standard-day rescheduling instead of a legacy-calendar migration.
   Production schedules are not changed by this patch.
 - Owner explicitly authorized commit/push/publication and two audited calendar
-  updates. Publication is in progress, not yet verified deployed. No schema SQL,
+  updates. Code e2f6baa was published through branch/dev/main; Vercel production
+  and the canonical 0.4.1 build/commit were verified. The two schedule saves
+  remain pending the owner's current TOTP in the existing admin dialogs. No schema SQL,
   credential rotation, real test charge or workflow/settings change is included.
 - Branch `codex/legacy-billing-compatibility`; validation and remaining risks:
   `docs/VALIDATION_0.4.1.md`. Release evidence: `docs/RELEASE_0.4.1.md`.

@@ -1,10 +1,10 @@
 # Billing Recovery 0.4.1
 
 Date: 2026-10-10 (America/Bogota).
-Status: local patch validated; owner authorized publication on 2026-10-10.
-Branch: codex/legacy-billing-compatibility. Before publication, production
-was verified as 0.4.0/47290fc. Publication and audited calendar saves are
-separate operations; their evidence is recorded in RELEASE_0.4.1.md.
+Status: patch published and canonical 0.4.1/e2f6baa verified on 2026-10-10.
+Branch: codex/legacy-billing-compatibility. Previous production was
+0.4.0/47290fc. Publication and audited calendar saves are separate operations;
+the saves still need the owner's TOTP. Evidence is recorded in RELEASE_0.4.1.md.
 No schema SQL, settings change, Docker cleanup or real test charge is included.
 
 ## Approved Scope

@@ -1,7 +1,7 @@
 # Release 0.4.1
 
 Date: 2026-10-10 (America/Bogota).
-Status: publication authorized; deployment verification in progress.
+Status: code published and verified; two audited calendar saves await TOTP.
 
 ## Scope And Authorization
 
@@ -20,18 +20,38 @@ Vercel team/project hablemos-por-ellos-projects/hablemos-por-ellos-cobros.
 - Local: 1322 tests, lint, TypeScript and isolated build passed; independent QA
   approved local (240 focused and 21 adversarial checks). Six opt-in SQL/HTTP
   integrations were not rerun. See VALIDATION_0.4.1.md.
-- Git commit and branch/dev/main promotion: pending.
-- Dev Preview ready and demo isolation: pending.
-- Production ready, canonical version/build/commit and safe read probes: pending.
+- Code commit e2f6baa, `[v0.4.1] Preserve payment recovery and flag unsupported
+  calendars`, pushed to branch/dev/main as fast-forward updates, without force.
+- Dev Preview D4vMkyqrJQh23WkFJcrJaraGBWdY and branch Preview
+  EgGjLcDhuHw7NmPCsXr7YEFLphwy have successful Vercel commit statuses.
+  No environment values were changed. Direct authenticated Preview UI testing
+  was not repeated: the inspection tab required Vercel login and was closed,
+  without disabling protection. Existing source rejects production Supabase
+  URLs outside Vercel Production; local build/testing used disconnected demo.
+- Initial Production BXfHQt4ebMra8edVZSSoVJ9QvWNN and GitHub deployment
+  6987394139 succeeded at 2026-10-10T21:53:19Z. Its unique build URL is
+  https://hablemos-por-ellos-cobros-6222l8oj7-hablemos-por-ellos-projects.vercel.app.
+  Canonical https://hablemos-por-ellos-cobros.vercel.app/admin/login returned 200,
+  version 0.4.1, production build and expected commit e2f6baa. Donar and acceptance
+  returned 200 with both legal links; unauthenticated admin returned 307 to login.
+  No payment, card tokenization, provider POST or donor mutation was used as a
+  test. This proves the observed routes/revision, not future bank approvals or
+  all authenticated sessions. Full Vercel runtime log inspection was unavailable.
 - Read-only inventory against the final main commit: pending; never run charge
   to test this release.
-- Two audited calendar saves: pending. Date proposals are October 16 and
+- Two audited calendar saves: NOT SAVED. Both existing production-admin dialogs
+  were prepared and remain open; the owner must enter their current Authenticator
+  code and confirm each change. No TOTP was read or requested in chat. Date
+  proposals are October 16 and
   November 6, 2026, at 07:00 Colombia/12:00 UTC. Preserve amount, source, status,
   consent and prior payments. Recheck history and pending attempts before saving.
   Use existing admin/session/MFA/recent TOTP/version/atomic audit; do not bypass
   the controls with service-role SQL. Public docs must not contain donor IDs,
   names, contact details, TOTP codes or payment identifiers.
-- Release tag/notes and final documentation: pending.
+- Release tag/notes and final documentation: in progress. A documentation-only
+  checkpoint records this verification; its deployment/short commit should be
+  checked again before closing publication. Runtime source is unchanged from
+  e2f6baa. Tag/release v0.4.1 identifies the final documented checkpoint.
 
 ## Recovery
 
