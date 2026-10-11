@@ -1,7 +1,7 @@
 # Release 0.4.2
 
 Date: 2026-10-10 (America/Bogota).
-Status: function applied and independently verified; code publication pending.
+Status: function and code published and verified; no real donor test mutations.
 
 ## Scope And Authorization
 
@@ -84,10 +84,27 @@ Do not confuse it with the verified pre-function FINAL.
 
 ## Publication And Recovery
 
-Code commit/push/deployment verification is pending. The old 0.4.1 API remains
-compatible with the new function while deployment is prepared; publishing only
-new UI against the old function would have rejected NULL TOTP timestamps.
-Do not reapply SQL when pushing code or because of a slow deployment.
+Code commit `c09b4e8`, `[v0.4.2] Require Authenticator at login without repeated
+action challenges`, pushed to branch/dev/main without force. Dev Preview
+`7vGk9femFzbgH68qgNkZk9aeyu1C` has a successful Vercel commit status. GitHub
+Preview deployment6988662895 also reports success, with protected URLs retained.
+No protection bypass or Preview configuration change was performed.
+
+Production deployment `Cpdy6zxfuaLEisGq8tEyZs3ktxuW` / GitHub6988698905 reports
+success at `2026-10-11T00:10:22Z` (October10 Colombia). Unique build URL:
+https://hablemos-por-ellos-cobros-h4se0cghp-hablemos-por-ellos-projects.vercel.app.
+Canonical GET-only probes confirm version0.4.2, revisionc09b4e8 and production
+build state; login/donar/acceptance200, both legal links present, unauthenticated
+admin307 to /admin/login. No cookies, cards, provider POST or donor mutation
+were used. This verifies observed runtime/routes, not future bank approvals or
+an authenticated production save. Full Vercel runtime log inspection was not run.
+
+The committed Git SQL artifact has the same SHA-256 as the applied artifact.
+Subsequent documentation-only checkpoints do not change runtime source; their
+exact active revision is recorded in release notes and Obsidian to avoid a
+self-referential documentation commit. Keep tagv0.4.2 on the tested code commit.
+Do not reapply SQL when pushing code or because of a slow deployment. The old
+0.4.1 API remains compatible with the new function for deployment recovery.
 
 Retain the old deployment and function definition in the encrypted FINAL. A
 rollback uses compatible code and, only if separately authorized, restores that

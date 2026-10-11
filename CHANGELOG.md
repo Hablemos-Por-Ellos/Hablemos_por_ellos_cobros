@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.2 - 2026-10-10 - Login-Only Admin MFA (Function Applied, Deployment Pending)
+## 0.4.2 - 2026-10-10 - Login-Only Admin MFA (Published And Verified)
 
 - Keep password and Authenticator at login; remove additional TOTP inputs and
   challenges from subscription changes and payment reconciliation.
@@ -20,7 +20,7 @@
   66 Auth/API/RLS checks and 210 browser checks pass, including three saves
   with no action MFA challenges or TOTP payloads. All 36 lab tables retain
   content across the function patch; saving creates zero payments/attempts/cycles.
-  Production behavior is not yet revalidated.
+  No authenticated mutation on a real donor is used as a production test.
 - Add an opt-in generated-TOC streaming path for private restoration on a
   read-only Docker root; preserve the original copy path and restoration checks.
 - After the authorized integration and backup gates, replace only the production
@@ -30,7 +30,11 @@
   Production preservation compares all 51 tables/501 rows, with zero row/table/
   permission changes; a separate read-only observer confirms the function.
   Retain a consistent encrypted post-function snapshot, not yet restored.
-- Branch `codex/admin-session-mfa`; code publication is pending. No donor edits,
+- Publish c09b4e8 through `codex/admin-session-mfa`, dev and main; Preview and
+  Production succeed. Canonical GET-only checks confirm version0.4.2/revision,
+  login/donar/legal endpoints200 and unauthenticated admin307 to login.
+  Keep the prior stable deployment and existing configuration unchanged.
+- No donor edits,
   workflow dispatch, provider charges, account/config/key changes.
   Details: `docs/ADMIN_SESSION_MFA_0.4.2.md` and `docs/RELEASE_0.4.2.md`.
 

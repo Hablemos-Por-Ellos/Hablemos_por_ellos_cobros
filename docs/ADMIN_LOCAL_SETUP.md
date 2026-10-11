@@ -2,7 +2,7 @@
 
 ## Ajuste local 0.4.2 - 2026-10-10
 
-El ultimo runtime verificado es 0.4.1/ece238d; codigo 0.4.2 aun sin publicacion.
+El runtime 0.4.2/c09b4e8 esta publicado y comprobado en el dominio canonico.
 La unica funcion productiva se aplico y verifico tras FINAL restaurado/comparado,
 sin tablas ni filas modificadas. Ver `RELEASE_0.4.2.md`. Authenticator se mantiene al iniciar
 sesion; monto, agenda, cancelacion, reactivacion y conciliacion usan la sesion
@@ -30,7 +30,7 @@ privadas ni el laboratorio persistente anterior. Auth/API/RLS: 66 comprobaciones
 navegador: 210, con monto, fecha y cancelacion guardados sin otro TOTP.
 Cero pagos/intentos/ciclos. Retira sus tres contenedores/red al finalizar.
 La publicacion y funcion reales estan autorizadas tras respaldo FINAL verificado;
-la funcion esta aplicada/verificada y el despliegue del codigo sigue pendiente.
+la funcion y el despliegue del codigo estan aplicados/verificados.
 No se autoriza despachar jobs o cargos de prueba.
 
 ## Historia y laboratorio base

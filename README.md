@@ -4,7 +4,7 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
 
 ## Estado actual
 
-- **0.4.2 probada; funcion productiva aplicada, publicacion pendiente, 2026-10-10.** Authenticator se pide
+- **0.4.2 publicada y comprobada, 2026-10-10.** Authenticator se pide
   al iniciar sesion, no al confirmar cada guardado o conciliacion. Cada API
   sigue comprobando sesion AAL2 vigente, rol activo, revocacion y CSRF; conserva
   motivo, Antes/Despues, version, idempotencia, auditoria y barreras financieras.
@@ -23,9 +23,12 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
   Tras confirmacion en chat, unica funcion aplicada a las 23:51:59 UTC;
   cero cambios en tablas/filas/permisos y observador independiente correcto.
   Respaldo posterior cifrado tambien conservado; este adicional aun no restaurado.
-  Rama `codex/admin-session-mfa`; codigo pendiente de commit/push/despliegue.
-  Ultima produccion verificada: 0.4.1/ece238d, con el control anterior.
-  Alcance, resultados y limites: `docs/ADMIN_SESSION_MFA_0.4.2.md`.
+  Commit `c09b4e8` publicado por rama/dev/main; Production y Preview exitosas.
+  Dominio canonico: login/donar/acceptance 200, admin sin sesion 307 al login,
+  footer 0.4.2/revision correcta y build de produccion. Sin guardados de prueba
+  sobre donantes reales ni cambios en variables, cuentas, llaves o workflows.
+  El despliegue anterior 0.4.1/ece238d se conserva; no repetir SQL al hacer push.
+  Alcance y limites: `docs/ADMIN_SESSION_MFA_0.4.2.md`; release: `docs/RELEASE_0.4.2.md`.
 - **0.4.1 publicada y verificada, 2026-10-10.** Parche de recuperacion de
   pagos enviados e inventario de calendarios incompatibles, sobre el esquema
   0.4.0 existente. No hay migracion nueva; un push no cambia agendas productivas.

@@ -1,12 +1,12 @@
 # Admin 0.4.2: Authenticator solo al iniciar sesion
 
 Fecha: 2026-10-10 Colombia. Estado: integral local correcta, funcion productiva
-aplicada/verificada y codigo aun pendiente de publicacion. Rama `codex/admin-session-mfa`.
+aplicada/verificada y codigo publicado/comprobado. Rama `codex/admin-session-mfa`.
 Ultima produccion verificada anteriormente: 0.4.1/ece238d; no se consultaron
 credenciales ni donantes reales para las pruebas. Continuacion autorizada:
 funcion/publicacion despues de la integral y del respaldo FINAL restaurado,
 comparado y confirmado en chat. Preparacion del respaldo solo lee el origen;
-Funcion aplicada tras el gate; publicacion del codigo todavia pendiente.
+Funcion aplicada tras el gate; runtime c09b4e8 publicado y dominio canonico comprobado.
 
 ## Alcance aprobado
 
@@ -156,10 +156,14 @@ Para repetir, pasar `--local-session-auth=yes`, `--playwright-module=<ruta>`,
 y `--cached-font=<woff2 publica cacheada>` al nuevo script. Nunca instalar un
 browser, copiar dotenv productivo ni usar una DB restaurada privada como fixture.
 
-## Limites y publicacion pendiente
+## Limites y publicacion
 
 GoTrue/SSR/cookies, login MFA y guardados reales quedaron probados de extremo a
 extremo LOCALMENTE. No se comprobaron Wompi ni mutaciones productivas nuevas.
+Production y Preview tienen estado exitoso y el dominio canonico muestra0.4.2,
+c09b4e8 y build de produccion. GET login/donar/acceptance200; admin sin sesion307.
+No se hizo un guardado sobre una persona real solo para probar. Los datos y
+cuentas existentes permanecen intactos; no cambiar variables ni reenrolar MFA.
 No se necesita otro proveedor, variable, llave, cuenta ni cambio de tablas.
 
 La funcion productiva ANTERIOR rechazaba NULL: publicar solo el frontend habria
