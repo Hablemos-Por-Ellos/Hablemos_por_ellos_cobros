@@ -26,7 +26,7 @@ function fillConfirmation(action: Action) {
   const dialog = within(screen.getByRole("dialog"));
   if (action === "amount") fireEvent.change(dialog.getByLabelText(/Nuevo monto mensual/), { target: { value: "31000" } });
   fireEvent.change(dialog.getByLabelText("Motivo"), { target: { value: "Autorizacion fixture del donante" } });
-  fireEvent.change(dialog.getByLabelText(/digo actual de Google/), { target: { value: "123456" } });
+  expect(dialog.queryByLabelText(/digo actual de Google/)).not.toBeInTheDocument();
   if (action === "reactivate") fireEvent.click(dialog.getByRole("checkbox"));
   return dialog;
 }
@@ -69,7 +69,8 @@ describe("explicit subscription confirmation", () => {
     act(() => { fireEvent.click(confirm); fireEvent.click(confirm); });
     await user.keyboard("{Enter}{Enter}{Escape}");
     expect(onMutate).toHaveBeenCalledTimes(1);
-    expect(onMutate).toHaveBeenCalledWith(sub.id, 3, expect.objectContaining({ action, reason: "Autorizacion fixture del donante", totpCode: "123456" }));
+    expect(onMutate).toHaveBeenCalledWith(sub.id, 3, expect.objectContaining({ action, reason: "Autorizacion fixture del donante" }));
+    expect(onMutate.mock.calls[0][2]).not.toHaveProperty("totpCode");
     expect(dialog.getByRole("button", { name: "Volver" })).toBeDisabled();
     expect(screen.getByRole("dialog")).toBeVisible();
     await act(async () => finish());

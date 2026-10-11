@@ -58,7 +58,7 @@ export async function restoreBackup(args) {
     }
     const restoreEvidence = await restoreArchive({ container: args.container, dump, manifest, client,
       database: labUrl.pathname.slice(1), operator: operator.name, password: decodeURIComponent(labUrl.password),
-      postgresPassword: args['lab-postgres-password'] });
+      postgresPassword: args['lab-postgres-password'], streamToc: args['stream-toc'] === 'yes' });
     const schemaPermissionsRestored = await restoreSchemaPermissions(client, manifest);
     const canonicalExpected = await reparseCheckDefinitions(client, manifest);
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");

@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.4.2 - 2026-10-10 - Login-Only Admin MFA (Function Applied, Deployment Pending)
+
+- Keep password and Authenticator at login; remove additional TOTP inputs and
+  challenges from subscription changes and payment reconciliation.
+- Revalidate the existing AAL2 session, expiry, active administrator role and
+  revocation on every API operation. Preserve CSRF, rate limits, reasons,
+  Before/After confirmation, versions, replay and financial safeguards.
+- Prepare a function-only SQL patch for `assert_admin_mutation_context`, with
+  the same signature, owner and execution privileges. No tables, columns,
+  indexes or historical rows change; audit records use NULL rather than a
+  fabricated per-action TOTP timestamp.
+- Test the real PostgreSQL function and amount/schedule RPCs in a disposable,
+  fictional network-isolated lab: all 14 table definitions and contents match,
+  invalid/revoked sessions fail, replay/reapply pass and no payment is started.
+- Validate 1329 tests, six opt-in integrations skipped, lint, TypeScript and an
+  isolated build using a cached public font fixture; inspect desktop/tablet/mobile.
+  Run a new ephemeral GoTrue/PostgREST/Next lab with fictional principals:
+  66 Auth/API/RLS checks and 210 browser checks pass, including three saves
+  with no action MFA challenges or TOTP payloads. All 36 lab tables retain
+  content across the function patch; saving creates zero payments/attempts/cycles.
+  Production behavior is not yet revalidated.
+- Add an opt-in generated-TOC streaming path for private restoration on a
+  read-only Docker root; preserve the original copy path and restoration checks.
+- After the authorized integration and backup gates, replace only the production
+  function at 2026-10-10T23:51:59Z. The fresh encrypted FINAL restored/compared
+  51 tables/501 rows, including Auth and complete metadata/permissions; two private
+  copies match. A restored-copy rehearsal rolls back without data changes.
+  Production preservation compares all 51 tables/501 rows, with zero row/table/
+  permission changes; a separate read-only observer confirms the function.
+  Retain a consistent encrypted post-function snapshot, not yet restored.
+- Branch `codex/admin-session-mfa`; code publication is pending. No donor edits,
+  workflow dispatch, provider charges, account/config/key changes.
+  Details: `docs/ADMIN_SESSION_MFA_0.4.2.md` and `docs/RELEASE_0.4.2.md`.
+
 ## 0.4.1 - 2026-10-10 - Payment Recovery Patch (Published)
 
 - Preserve checkout recovery after a previously submitted payment when provider
@@ -14,8 +48,9 @@
   Production schedules are not changed by this patch.
 - Owner explicitly authorized commit/push/publication and two audited calendar
   updates. Code e2f6baa was published through branch/dev/main; Vercel production
-  and the canonical 0.4.1 build/commit were verified. The two schedule saves
-  remain pending the owner's current TOTP in the existing admin dialogs. No schema SQL,
+  and the canonical 0.4.1 build/commit were verified. The owner subsequently
+  saved both schedules, with billing version 1 visible; inventory 38091149166
+  passed with no calendar blockers, sends or charges. No schema SQL,
   credential rotation, real test charge or workflow/settings change is included.
 - Branch `codex/legacy-billing-compatibility`; validation and remaining risks:
   `docs/VALIDATION_0.4.1.md`. Release evidence: `docs/RELEASE_0.4.1.md`.

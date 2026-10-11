@@ -1,5 +1,27 @@
 # Respaldo privado y restauracion local - v0.3.0
 
+## Checkpoint 0.4.2 - 2026-10-10
+
+Para el reemplazo exclusivo de una funcion administrativa se genero un FINAL
+fresco cifrado: 51 tablas/501 filas, restauracion/comparacion de IDs, contenido,
+Auth, esquema y permisos completa, sin diferencias. Storage tiene cero objetos.
+Dos copias privadas en D: y C:, mismo PC y hashes iguales; no son copia offsite.
+La confirmacion obligatoria en chat se publico antes del unico COMMIT productivo.
+No se aplicaron otra vez las migraciones anteriores ni se tocaron tablas/filas.
+Se conserva un snapshot posterior cifrado adicional, todavia no restaurado.
+Detalles de ubicaciones, fechas y limites: `RELEASE_0.4.2.md`.
+
+El laboratorio nuevo uso network=none, sin puertos/montajes/volumenes persistentes,
+root read-only y PGDATA/tmp en tmpfs. `--stream-toc=yes` permite enviar unicamente
+las listas TOC generadas a ese tmpfs: Docker cp rechaza el root read-only aun
+cuando /tmp sea escribible. Esta opcion no debilita la restauracion ni habilita
+red/puertos; el comportamiento anterior sin opcion queda intacto. Listas y
+destino validados, salida descartada y permisos privados. Antes de ensayar DDL,
+alinear el propietario de la DB y usar una conexion real como el operador
+original, no SET ROLE desde el superusuario auxiliar. No ampliar permisos del
+origen para compensar diferencias del laboratorio. Solo se retiro el contenedor
+nuevo despues de guardar evidencias; se conservaron todas las copias anteriores.
+
 Este procedimiento no autoriza una migracion productiva. No incluye contrasenas,
 URLs privadas, datos de donantes ni archivos de respaldo.
 

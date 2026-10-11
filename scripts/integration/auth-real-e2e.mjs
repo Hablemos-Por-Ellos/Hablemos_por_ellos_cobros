@@ -27,12 +27,6 @@ function codeAt(secret, milliseconds = Date.now(), digits = 6) {
   const hash = createHmac('sha1',Buffer.from(bytes)).update(counter).digest();
   return String((hash.readUInt32BE(hash.at(-1) & 15) & 0x7fffffff) % 10 ** digits).padStart(digits,'0');
 }
-async function freshCode(secret) {
-  // GoTrue rejects replay of the same TOTP step; wait only until the next real step.
-  const delay = 30000 - Date.now() % 30000 + 1200;
-  await new Promise((resolve) => setTimeout(resolve,delay));
-  return codeAt(secret);
-}
 function sessionClient(config, jar = new Map()) {
   const sb = createServerClient(config.url,config.anonKey,{
     auth: { autoRefreshToken: false },
@@ -63,6 +57,8 @@ try {
   await client.connect();
   const { rows: [guard] } = await client.query(`select current_database() = 'hpe_auth_lab'
     and public.payment_admin_schema_ready()
+    and position('admin-session-mfa-v0.4.2' in pg_get_functiondef(
+      'public.assert_admin_mutation_context(uuid,text,timestamptz,timestamptz)'::regprocedure)) > 0
     and exists(select 1 from information_schema.columns where table_schema = 'auth'
       and table_name = 'users' and column_name = 'encrypted_password') as safe`);
   check(guard.safe,'REAL_AUTH_LAB_REQUIRED');
@@ -117,7 +113,7 @@ try {
   await client.query(`insert into public.subscriptions(id,donor_id,amount,currency,frequency,status,reference,
     preferred_payment_day,next_payment_date,wompi_payment_source_id) values($1,$2,1500,'COP','monthly','active',$3,16,$4,'fixture-source')`,
   [subscriptionId,donorId,`HPE-AUTH-${suffix}`,date]);
-  const change = { action: 'amount',amount: 1600,reason: 'Fictitious Auth integration',totpCode: '000000',
+  const change = { action: 'amount',amount: 1600,reason: 'Fictitious Auth integration',
     expectedVersion: 0,requestId: randomUUID() };
   check((await appRequest(`/api/admin/subscriptions/${subscriptionId}`,{ method: 'PATCH',body: change })).status === 401,'API_NO_SESSION_REJECTED');
   check((await appRequest(`/api/admin/subscriptions/${subscriptionId}`,{ jar,method: 'PATCH',body: change })).status === 401,'API_AAL1_REJECTED');
@@ -179,14 +175,12 @@ try {
   check(!!forbiddenRpc.error,'SERVICE_RPC_NOT_CALLABLE_FROM_BROWSER');
   const csrf = await appRequest(`/api/admin/subscriptions/${subscriptionId}`,{ jar,method: 'PATCH',body: change,origin: 'https://foreign.example.test' });
   check(csrf.status === 403,'CSRF_REJECTED');
-  check((await appRequest(`/api/admin/subscriptions/${subscriptionId}`,{ jar,method: 'PATCH',body: change })).status === 403,'BAD_TOTP_REJECTED');
   stage = 'mutation';
-  change.totpCode = await freshCode(secret);
+  check(!('totpCode' in change),'MUTATIONS_USE_LOGIN_MFA_ONLY');
   const updated = await appRequest(`/api/admin/subscriptions/${subscriptionId}`,{ jar,method: 'PATCH',body: change });
   if (updated.status !== 200) {
     const result = await updated.clone().json().catch(() => ({}));
     const categories = new Map([
-      ['El codigo de Google Authenticator no es valido.', 'TOTP_REJECTED'],
       ['Origen no permitido.', 'ORIGIN_REJECTED'],
       ['La sesion administrativa no esta autorizada.', 'ADMIN_CONTEXT_REJECTED'],
       ['Esta operacion requiere una sesion administrativa real.', 'SESSION_REJECTED'],
@@ -198,22 +192,24 @@ try {
   check(updated.status === 200,'VERIFIED_ADMIN_MUTATION_SUCCEEDS');
   const { rows: [stored] } = await client.query('select amount,billing_version,next_payment_date from public.subscriptions where id=$1',[subscriptionId]);
   check(stored.amount === 1600 && stored.billing_version === 1 && stored.next_payment_date.toISOString() === date,'NEXT_AMOUNT_ONLY_CHANGED');
-  const { rows: [audit] } = await client.query('select count(*)::integer as count from public.admin_audit_logs where subscription_id=$1 and actor_user_id=$2',[subscriptionId,userId]);
-  check(audit.count === 1,'ADMIN_CHANGE_AND_AUDIT_ATOMIC');
+  const { rows: [audit] } = await client.query(`select count(*)::integer as count,
+    bool_and(actor_aal='aal2' and totp_verified_at is null) as session_only
+    from public.admin_audit_logs where subscription_id=$1 and actor_user_id=$2`,[subscriptionId,userId]);
+  check(audit.count === 1 && audit.session_only,'ADMIN_CHANGE_AND_AUDIT_ATOMIC_WITH_LOGIN_MFA');
   const { rows: [payment] } = await client.query('select count(*)::integer as count from public.payments where subscription_id=$1',[subscriptionId]);
   check(payment.count === 0,'SAVING_NEVER_CREATES_PAYMENT');
 
   stage = 'schedule';
   const scheduledDate = new Date(Date.UTC(new Date().getUTCFullYear() + 1,1,6,12)).toISOString();
   const scheduleChange = { action: 'schedule',reason: 'Fictitious skip-month integration',expectedVersion: 1,
-    preferredPaymentDay: 6,nextPaymentDate: scheduledDate,requestId: randomUUID(),totpCode: await freshCode(secret) };
+    preferredPaymentDay: 6,nextPaymentDate: scheduledDate,requestId: randomUUID() };
   check((await appRequest(`/api/admin/subscriptions/${subscriptionId}`,{ jar,method: 'PATCH',body: scheduleChange })).status === 200,'REAL_SCHEDULE_MUTATION');
   const { rows: [schedule] } = await client.query('select amount,billing_version,preferred_payment_day,next_payment_date from public.subscriptions where id=$1',[subscriptionId]);
   check(schedule.amount === 1600 && schedule.billing_version === 2 && schedule.preferred_payment_day === 6
     && schedule.next_payment_date.toISOString() === scheduledDate,'SCHEDULE_PRESERVES_AMOUNT_AND_COLOMBIA_DATE');
   stage = 'cancel';
   const cancelChange = { action: 'cancel',reason: 'Fictitious cancellation integration',expectedVersion: 2,
-    requestId: randomUUID(),totpCode: await freshCode(secret) };
+    requestId: randomUUID() };
   check((await appRequest(`/api/admin/subscriptions/${subscriptionId}`,{ jar,method: 'PATCH',body: cancelChange })).status === 200,'REAL_CANCELLATION_MUTATION');
   const { rows: [cancelled] } = await client.query('select status,billing_version,next_payment_date,cancelled_at from public.subscriptions where id=$1',[subscriptionId]);
   check(cancelled.status === 'cancelled' && cancelled.billing_version === 3

@@ -11,7 +11,7 @@ vi.mock("@/lib/supabase-auth-server", () => ({
   isServerAuthEnvironmentAllowed: vi.fn().mockResolvedValue(true),
 }));
 
-import { getAdminContext, getAdminBootstrapContext, isSameOriginRequest, verifyRecentTotp } from "@/lib/admin-auth";
+import { getAdminContext, getAdminBootstrapContext, isSameOriginRequest } from "@/lib/admin-auth";
 
 describe("exact source/target origin validation", () => {
   afterEach(() => vi.unstubAllEnvs());
@@ -148,14 +148,18 @@ describe("admin authentication boundary", () => {
     }));
   });
 
-  it("requires a verified TOTP challenge for each sensitive mutation", async () => {
+  it("reuses an unexpired AAL2 session without a second TOTP challenge", async () => {
     vi.stubEnv("ADMIN_DEMO_MODE", "false");
-    mocks.getServerAuthSupabaseClient.mockResolvedValue(authClient({
+    const client = authClient({
+      issuedAt: Math.floor(Date.now() / 1000) - 3600,
       challengeError: { message: "invalid code" },
-    }));
+    });
+    mocks.getServerAuthSupabaseClient.mockResolvedValue(client);
 
-    await expect(verifyRecentTotp("123456")).resolves.toBe(false);
-    await expect(verifyRecentTotp("12345x")).resolves.toBe(false);
+    expect(await getAdminContext()).toMatchObject({ aal: "aal2", demo: false });
+    expect(await getAdminContext()).toMatchObject({ aal: "aal2", demo: false });
+    expect(client.auth.mfa.challengeAndVerify).not.toHaveBeenCalled();
+    expect(client.auth.mfa.listFactors).not.toHaveBeenCalled();
   });
 
   it.each(["viewer", "", "owner"])("rejects unexpected role %s at the panel and bootstrap", async (role) => {
@@ -181,12 +185,11 @@ describe("admin authentication boundary", () => {
     expect(await getAdminContext()).toBeNull();
   });
 
-  it("does not connect demo or treat demo as fresh TOTP", async () => {
+  it("does not connect demo or treat demo as a real MFA session", async () => {
     vi.stubEnv("APP_OPERATION_MODE", "demo");
     vi.stubEnv("ADMIN_DEMO_MODE", "true");
     vi.stubEnv("VERCEL_ENV", "preview");
     expect((await getAdminContext())?.demo).toBe(true);
-    expect(await verifyRecentTotp("123456")).toBe(false);
     expect(mocks.getServerAuthSupabaseClient).not.toHaveBeenCalled();
     expect(mocks.getServiceSupabaseClient).not.toHaveBeenCalled();
   });
@@ -195,5 +198,16 @@ describe("admin authentication boundary", () => {
     mocks.getServiceSupabaseClient.mockReturnValue({ rpc: vi.fn().mockResolvedValue({ data: false, error: null }) });
     expect(await getAdminContext()).toBeNull();
     expect(mocks.getServerAuthSupabaseClient).not.toHaveBeenCalled();
+  });
+
+  it("rejects an expired AAL2 token even after a successful MFA login", async () => {
+    const client = authClient();
+    client.auth.getClaims.mockResolvedValue({ data: { claims: {
+      sub: "10000000-0000-0000-0000-000000000001", aal: "aal2",
+      iat: Math.floor(Date.now() / 1000) - 3600, exp: Math.floor(Date.now() / 1000) - 1,
+    } }, error: null });
+    mocks.getServerAuthSupabaseClient.mockResolvedValue(client);
+    expect(await getAdminContext()).toBeNull();
+    expect(client.auth.mfa.challengeAndVerify).not.toHaveBeenCalled();
   });
 });

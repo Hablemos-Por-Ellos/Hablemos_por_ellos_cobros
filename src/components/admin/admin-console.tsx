@@ -45,7 +45,7 @@ import { BuildIdentity } from "@/components/build-identity";
 
 type AdminView = "dashboard" | "donors" | "subscriptions" | "payments" | "detail";
 type Notice = { type: "success" | "info" | "error"; message: string } | null;
-type RecoveryInput = { action: "reconcile"; transactionId: string; reason: string; totpCode: string; expectedVersion: number };
+type RecoveryInput = { action: "reconcile"; transactionId: string; reason: string; expectedVersion: number };
 
 type AdminConsoleProps = {
   initialView: Exclude<AdminView, "detail">;
@@ -470,7 +470,6 @@ function Metric({ label, value, detail, icon: Icon, tone }: { label: string; val
 
 function RecoveryQueue({
   data,
-  demo,
   readOnly,
   onRecover,
 }: {
@@ -482,7 +481,6 @@ function RecoveryQueue({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [transactionId, setTransactionId] = useState("");
   const [reason, setReason] = useState("");
-  const [totpCode, setTotpCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const expectedVersionRef = useRef(0);
   const selected = data.recoveryAttempts.find((attempt) => attempt.id === selectedId) ?? null;
@@ -492,18 +490,16 @@ function RecoveryQueue({
     setSelectedId(null);
     setTransactionId("");
     setReason("");
-    setTotpCode("");
   };
   const submitReconciliation = async () => {
     if (!selected || submitting) return;
     setSubmitting(true);
     try {
-      await onRecover(selected.id, { action: "reconcile", transactionId: transactionId.trim(), reason: reason.trim(), totpCode,
+      await onRecover(selected.id, { action: "reconcile", transactionId: transactionId.trim(), reason: reason.trim(),
         expectedVersion: expectedVersionRef.current });
       setSelectedId(null);
       setTransactionId("");
       setReason("");
-      setTotpCode("");
     } catch {
       // The parent retains the error notice; the form remains available for retry.
     } finally {
@@ -539,8 +535,7 @@ function RecoveryQueue({
           <p className="mt-3 text-sm leading-6 text-slate-600">Busca la referencia <strong>{selected.reference}</strong> en Wompi. Si existe, pega el ID exacto. Conciliar solo consulta una transacción existente y no genera un cobro.</p>
           <label className="mt-5 block text-sm font-semibold text-slate-700">ID de transacción en Wompi<input value={transactionId} onChange={(event) => setTransactionId(event.target.value.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 200))} className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 font-mono text-sm" placeholder="Ej. 1234567-..." /></label>
           <label className="mt-4 block text-sm font-semibold text-slate-700">Motivo<textarea value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-md border border-slate-300 px-3 py-2 text-base font-normal" placeholder="Cómo se localizó y verificó la transacción" /></label>
-          {!demo && <label className="mt-4 block text-sm font-semibold text-slate-700">Código actual de Google Authenticator<input inputMode="numeric" maxLength={6} value={totpCode} onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, "").slice(0, 6))} className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-center text-lg font-bold tracking-[0.3em]" /></label>}
-          <div className="mt-6 grid gap-3 sm:grid-cols-2"><button type="button" disabled={readOnly || submitting || transactionId.trim().length < 3 || reason.trim().length < 5 || (!demo && totpCode.length !== 6)} onClick={submitReconciliation} className="min-h-11 rounded-md bg-foundation-blue px-4 text-sm font-bold text-white disabled:opacity-50">{submitting ? "Verificando..." : "Verificar y conciliar"}</button><button type="button" disabled={submitting} onClick={close} className="min-h-11 rounded-md border border-slate-300 px-4 text-sm font-bold text-slate-700">Volver</button></div>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2"><button type="button" disabled={readOnly || submitting || transactionId.trim().length < 3 || reason.trim().length < 5} onClick={submitReconciliation} className="min-h-11 rounded-md bg-foundation-blue px-4 text-sm font-bold text-white disabled:opacity-50">{submitting ? "Verificando..." : "Verificar y conciliar"}</button><button type="button" disabled={submitting} onClick={close} className="min-h-11 rounded-md border border-slate-300 px-4 text-sm font-bold text-slate-700">Volver</button></div>
         </div>
       </div>}
     </section>
@@ -890,7 +885,6 @@ function PaymentsList({ data }: { data: AdminDemoState }) {
 type AdminMutation = {
   action: "amount" | "schedule" | "cancel" | "reactivate" | "cancel_retry";
   reason: string;
-  totpCode: string;
   amount?: number;
   preferredPaymentDay?: 1 | 6 | 16 | 28;
   nextPaymentDate?: string;
@@ -904,7 +898,7 @@ function monthFromDate(value: string | null) {
   return `${colombia.getUTCFullYear()}-${String(colombia.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-export function DonorDetail({ data, donorId, subscriptionId, demo, readOnly, onMutate }: { data: AdminDemoState; donorId: string; subscriptionId?: string; demo: boolean; readOnly: boolean; onMutate: (subscriptionId: string, version: number, mutation: AdminMutation) => Promise<void> }) {
+export function DonorDetail({ data, donorId, subscriptionId, readOnly, onMutate }: { data: AdminDemoState; donorId: string; subscriptionId?: string; demo: boolean; readOnly: boolean; onMutate: (subscriptionId: string, version: number, mutation: AdminMutation) => Promise<void> }) {
   const router = useRouter();
   const donor = data.donors.find((item) => item.id === donorId);
   const subscriptions = donorSubscriptions(data, donorId);
@@ -922,7 +916,6 @@ export function DonorDetail({ data, donorId, subscriptionId, demo, readOnly, onM
   const [amount, setAmount] = useState(String(subscription?.amount ?? 1500));
   const [actionOpen, setActionOpen] = useState<AdminMutation["action"] | null>(null);
   const [reason, setReason] = useState("");
-  const [totpCode, setTotpCode] = useState("");
   const [donorAuthorizationConfirmed, setDonorAuthorizationConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -956,7 +949,6 @@ export function DonorDetail({ data, donorId, subscriptionId, demo, readOnly, onM
   useEffect(() => {
     setActionOpen(null);
     setReason("");
-    setTotpCode("");
     setDonorAuthorizationConfirmed(false);
   }, [subscription?.id]);
   useEffect(() => {
@@ -1029,7 +1021,6 @@ export function DonorDetail({ data, donorId, subscriptionId, demo, readOnly, onM
       !actionOpen
       || !isMonthly || readOnly || submittingRef.current
       || reason.trim().length < 5
-      || (!demo && !/^\d{6}$/.test(totpCode))
       || ((actionOpen === "schedule" || actionOpen === "reactivate") && !nextPaymentIsFuture)
       || (actionOpen === "reactivate" && !donorAuthorizationConfirmed)
       || (actionOpen === "amount" && !amountIsValid)
@@ -1042,7 +1033,6 @@ export function DonorDetail({ data, donorId, subscriptionId, demo, readOnly, onM
       await onMutate(subscription!.id, expectedVersionRef.current, {
         action: actionOpen,
         reason: reason.trim(),
-        totpCode,
         amount: actionOpen === "amount" ? parsedAmount : undefined,
         preferredPaymentDay: actionOpen === "schedule" || actionOpen === "reactivate" ? selectedDay : undefined,
         nextPaymentDate: actionOpen === "schedule" || actionOpen === "reactivate" ? nextPaymentDate : undefined,
@@ -1052,7 +1042,6 @@ export function DonorDetail({ data, donorId, subscriptionId, demo, readOnly, onM
       submittingRef.current = false;
       closeAction();
       setReason("");
-      setTotpCode("");
     } catch {
       // onMutate already shows a sanitized error notice and the dialog stays open.
     } finally {
@@ -1155,9 +1144,8 @@ export function DonorDetail({ data, donorId, subscriptionId, demo, readOnly, onM
             {(actionOpen === "schedule" || actionOpen === "reactivate") && <p className={cn("mt-5 rounded-md p-3 text-sm", nextPaymentIsFuture ? "bg-blue-50 text-blue-900" : "bg-rose-50 text-rose-800")}>Próximo cobro: <strong>{formatDate(nextPaymentDate)}</strong>. {nextPaymentIsFuture ? "Guardar no realiza un cobro." : "Elige una fecha futura antes de continuar."}</p>}
             {actionOpen === "reactivate" && <label className="mt-4 flex items-start gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950"><input type="checkbox" disabled={submitting} checked={donorAuthorizationConfirmed} onChange={(event) => setDonorAuthorizationConfirmed(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-emerald-300 text-emerald-700" /><span>Confirmo que el donante autorizó reactivar los cobros y un único reintento al día siguiente por fondos insuficientes verificados.</span></label>}
             <label className="mt-5 block text-sm font-semibold text-slate-700">Motivo<textarea data-dialog-initial-focus disabled={submitting} value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-md border border-slate-300 px-3 py-2 text-base font-normal" placeholder="Mínimo 5 caracteres para la auditoría" /></label>
-            {!demo && <label className="mt-4 block text-sm font-semibold text-slate-700">Código actual de Google Authenticator<input inputMode="numeric" autoComplete="one-time-code" maxLength={6} disabled={submitting} value={totpCode} onChange={(event) => setTotpCode(event.target.value.replace(/\D/g, "").slice(0, 6))} className="mt-2 h-11 w-full rounded-md border border-slate-300 px-3 text-center text-lg font-bold tracking-normal" /></label>}
             <p className="mt-5 text-sm font-semibold text-slate-900">¿Confirmas este cambio?</p>
-            <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button type="button" disabled={submitting} onClick={closeAction} className="min-h-11 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 disabled:opacity-50">Volver</button><button type="button" disabled={readOnly || submitting || reason.trim().length < 5 || (!demo && totpCode.length !== 6) || (actionOpen === "amount" && !amountIsValid) || ((actionOpen === "schedule" || actionOpen === "reactivate") && (!nextPaymentIsFuture || hasOpenAttempt)) || (actionOpen === "amount" && hasOpenAttempt) || (actionOpen === "reactivate" && !donorAuthorizationConfirmed) || (actionOpen === "cancel_retry" && !canCancelRetry)} onClick={confirmAction} className="min-h-11 rounded-md bg-teal-800 px-4 text-sm font-semibold text-white hover:bg-teal-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 disabled:opacity-50">{submitting ? "Guardando..." : "Confirmar cambio"}</button></div>
+            <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button type="button" disabled={submitting} onClick={closeAction} className="min-h-11 rounded-md border border-slate-300 px-4 text-sm font-semibold text-slate-700 disabled:opacity-50">Volver</button><button type="button" disabled={readOnly || submitting || reason.trim().length < 5 || (actionOpen === "amount" && !amountIsValid) || ((actionOpen === "schedule" || actionOpen === "reactivate") && (!nextPaymentIsFuture || hasOpenAttempt)) || (actionOpen === "amount" && hasOpenAttempt) || (actionOpen === "reactivate" && !donorAuthorizationConfirmed) || (actionOpen === "cancel_retry" && !canCancelRetry)} onClick={confirmAction} className="min-h-11 rounded-md bg-teal-800 px-4 text-sm font-semibold text-white hover:bg-teal-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 disabled:opacity-50">{submitting ? "Guardando..." : "Confirmar cambio"}</button></div>
           </div>
         </div>
       )}
@@ -1189,8 +1177,7 @@ export function AdminConsole({ initialView, donorId, subscriptionId, initialData
 
   const submitConfirmed = async (url: string, method: string, input: Record<string, unknown>) => {
     if (readOnly) throw new Error("Solo lectura.");
-    const { totpCode: _code, ...operation } = input;
-    const key = JSON.stringify({ url, ...operation });
+    const key = JSON.stringify({ url, ...input });
     const requestId = requests.current.get(key) ?? crypto.randomUUID();
     requests.current.set(key, requestId);
     try {

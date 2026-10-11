@@ -46,7 +46,6 @@ function request(overrides: Record<string, unknown> = {}) {
       action: "reconcile",
       transactionId: "tx-admin-recovery",
       reason: "ID localizado y confirmado en Wompi",
-      totpCode: "123456",
       requestId: "30000000-0000-0000-0000-000000000010",
       expectedVersion: 3,
       ...overrides,
@@ -71,7 +70,7 @@ function serviceClient(attemptState = "unknown", existingTransactionId: string |
     if (!["billing_v2_admin_recovery_replay", "billing_v2_admin_reconcile_payment_attempt"].includes(name)) {
       throw new Error(`Unexpected RPC ${name}`);
     }
-    if (args.p_actor_user_id !== adminId || args.p_actor_aal !== "aal2" || !args.p_actor_session_issued_at || !args.p_totp_verified_at) {
+    if (args.p_actor_user_id !== adminId || args.p_actor_aal !== "aal2" || !args.p_actor_session_issued_at) {
       return failure("ADMIN_NOT_AUTHORIZED");
     }
     const key = `${args.p_actor_user_id}:${args.p_request_id}`;
@@ -215,7 +214,7 @@ describe("POST /api/admin/payment-attempts/[id]/reconcile", () => {
       p_expected_version: 3,
       p_actor_aal: "aal2",
       p_actor_session_issued_at: "2026-10-01T00:00:00Z",
-      p_totp_verified_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      p_totp_verified_at: null,
       p_raw: expect.objectContaining({ verification_source: "provider_get", environment: "sandbox",
         id: "tx-admin-recovery", reference: "HPE-ADMIN-RECOVERY-202609", amount_in_cents: 2400000,
         currency: "COP", payment_source_id: "source-admin-recovery", status: "approved",
@@ -241,7 +240,7 @@ describe("POST /api/admin/payment-attempts/[id]/reconcile", () => {
     expect(await response.json()).toMatchObject({ recovery: { result: "review", needsReview: true }, needsReview: true });
     expect(client.rpc).toHaveBeenCalledWith("billing_v2_admin_reconcile_payment_attempt", expect.objectContaining({ p_amount: 10000, p_currency: "COP",
       p_attempt_id: attemptId, p_transaction_id: "tx-admin-recovery", p_expected_version: 3, p_actor_aal: "aal2" }));
-    expect(mocks.verifyRecentTotp).toHaveBeenCalledWith("123456");
+    expect(mocks.verifyRecentTotp).not.toHaveBeenCalled();
     expect(client.paymentQuery.or).toHaveBeenCalledWith(`wompi_transaction_id.eq.tx-admin-recovery,payment_attempt_id.eq.${attemptId}`);
     expect(client.paymentQuery.limit).toHaveBeenCalledWith(2);
     expect(client.rpc).toHaveBeenCalledWith("consume_api_rate_limit", expect.objectContaining({ p_scope: "admin_payment_recovery" }));
@@ -322,7 +321,7 @@ describe("POST /api/admin/payment-attempts/[id]/reconcile", () => {
     expect(await response.json()).not.toHaveProperty("recovery");
     expect(client.rpc).toHaveBeenCalledWith("billing_v2_admin_reconcile_payment_attempt", expect.objectContaining({ p_amount: 10000, p_currency: "COP" }));
   });
-  it.each(["CSRF", "rate limit", "TOTP"])("retains the %s guard before historical lookup", async (guard) => {
+  it.each(["CSRF", "rate limit", "revocation"])("retains the %s guard before historical lookup", async (guard) => {
     const client = serviceClient();
     mocks.getServiceSupabaseClient.mockReturnValue(client);
     if (guard === "CSRF") mocks.isSameOriginRequest.mockReturnValue(false);
@@ -331,7 +330,8 @@ describe("POST /api/admin/payment-attempts/[id]/reconcile", () => {
       client.rpc.mockImplementation(async (name, args) => name === "consume_api_rate_limit"
         ? { data: false, error: null } as never : original(name, args));
     }
-    if (guard === "TOTP") mocks.verifyRecentTotp.mockResolvedValue(false);
+    if (guard === "revocation") mocks.getAdminContext.mockResolvedValueOnce({ userId: adminId, demo: false,
+      aal: "aal2", sessionIssuedAt: "2026-10-01T00:00:00Z" }).mockResolvedValueOnce(null);
     expect((await POST(request(), { params: Promise.resolve({ id: attemptId }) })).status).toBe(guard === "rate limit" ? 429 : 403);
     expect(client.from).not.toHaveBeenCalled();
     expect(mocks.getWompiTransaction).not.toHaveBeenCalled();
@@ -506,7 +506,7 @@ describe("POST /api/admin/payment-attempts/[id]/reconcile", () => {
     expect(replayCall[1]).toMatchObject({ p_attempt_id: attemptId, p_actor_user_id: adminId,
       p_expected_version: 3, p_actor_aal: "aal2", p_actor_session_issued_at: "2026-10-01T00:00:00Z" });
     const replayIndex = client.rpc.mock.calls.findIndex(([name]) => name === "billing_v2_admin_recovery_replay");
-    expect(client.rpc.mock.invocationCallOrder[replayIndex]).toBeGreaterThan(mocks.verifyRecentTotp.mock.invocationCallOrder[0]);
+    expect(client.rpc.mock.invocationCallOrder[replayIndex]).toBeGreaterThan(mocks.getAdminContext.mock.invocationCallOrder[1]);
     expect(client.rpc.mock.invocationCallOrder[replayIndex]).toBeLessThan(client.from.mock.invocationCallOrder[0]);
     expect(client.rpc.mock.invocationCallOrder[replayIndex]).toBeLessThan(mocks.getWompiTransaction.mock.invocationCallOrder[0]);
     expect(fetch).not.toHaveBeenCalled();
@@ -542,7 +542,7 @@ describe("POST /api/admin/payment-attempts/[id]/reconcile", () => {
     expect(client.from).not.toHaveBeenCalled();
     expect(mocks.getWompiTransaction).not.toHaveBeenCalled();
     expect(mocks.isWompiPaymentSourceAvailable).not.toHaveBeenCalled();
-    expect(mocks.verifyRecentTotp).toHaveBeenCalledWith("654321");
+    expect(mocks.verifyRecentTotp).not.toHaveBeenCalled();
     expect(client.rpc.mock.calls.map(([name]) => name)).toEqual([
       "billing_retry_schema_ready", "consume_api_rate_limit", "billing_v2_admin_recovery_replay",
     ]);
@@ -568,14 +568,13 @@ describe("POST /api/admin/payment-attempts/[id]/reconcile", () => {
     }
   );
 
-  it.each(["TOTP", "revocation", "rate limit"])("does not bypass %s to retrieve a committed replay", async (guard) => {
+  it.each(["revocation", "rate limit"])("does not bypass %s to retrieve a committed replay", async (guard) => {
     const client = serviceClient();
     mocks.getServiceSupabaseClient.mockReturnValue(client);
     expect((await POST(request(), { params: Promise.resolve({ id: attemptId }) })).status).toBe(200);
     client.rpc.mockClear();
     client.from.mockClear();
     mocks.getWompiTransaction.mockClear();
-    if (guard === "TOTP") mocks.verifyRecentTotp.mockResolvedValue(false);
     if (guard === "revocation") mocks.getAdminContext.mockResolvedValueOnce({ userId: adminId, demo: false,
       aal: "aal2", sessionIssuedAt: "2026-10-01T00:00:00Z" }).mockResolvedValueOnce(null);
     if (guard === "rate limit") {

@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getAdminContext, isAdminDemoMode, isAdminSchemaReady, isSameOriginRequest, verifyRecentTotp } from "@/lib/admin-auth";
+import { getAdminContext, isAdminDemoMode, isAdminSchemaReady, isSameOriginRequest } from "@/lib/admin-auth";
 import { getServiceSupabaseClient } from "@/lib/supabase-server";
 import { isWompiPaymentSourceAvailable } from "@/lib/wompi-server";
 import { assertFinancialOperationsEnabled } from "@/lib/operation-mode";
@@ -12,7 +12,8 @@ import { WOMPI_ENV } from "@/lib/wompi";
 const mutationSchema = z.object({
   action: z.enum(["amount", "schedule", "cancel", "cancel_retry", "reactivate"]),
   reason: z.string().trim().min(5).max(500),
-  totpCode: z.string().regex(/^\d{6}$/),
+  // Accepted only for older clients; authorization comes from the verified AAL2 session.
+  totpCode: z.string().regex(/^\d{6}$/).optional(),
   expectedVersion: z.number().int().min(0),
   requestId: z.string().uuid(),
   expectedCycleId: z.string().uuid().optional(),
@@ -91,11 +92,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (rateError) return NextResponse.json({ message: "No fue posible validar el limite de seguridad." }, { status: 503 });
   if (rateAllowed !== true) return NextResponse.json({ message: "Demasiados intentos. Espera unos minutos." }, { status: 429 });
 
-  if (!(await verifyRecentTotp(input.totpCode))) {
-    return NextResponse.json({ message: "El codigo de Google Authenticator no es valido." }, { status: 403 });
-  }
-  const totpVerifiedAt = new Date().toISOString();
-
   const currentAdmin = await getAdminContext();
   if (!currentAdmin || currentAdmin.demo || currentAdmin.userId !== admin.userId) {
     return NextResponse.json({ message: "La sesion administrativa cambio o fue revocada." }, { status: 403 });
@@ -113,7 +109,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     p_actor_user_id: admin.userId,
     p_actor_aal: currentAdmin.aal,
     p_actor_session_issued_at: currentAdmin.sessionIssuedAt,
-    p_totp_verified_at: totpVerifiedAt,
+    p_totp_verified_at: null,
     p_amount: input.action === "amount" ? input.amount ?? null : null,
     p_preferred_payment_day: input.action === "schedule" || input.action === "reactivate" ? input.preferredPaymentDay ?? null : null,
     p_next_payment_date: input.action === "schedule" || input.action === "reactivate" ? input.nextPaymentDate ?? null : null,

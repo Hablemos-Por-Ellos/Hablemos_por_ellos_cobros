@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getAdminContext, isAdminDemoMode, isAdminSchemaReady, isSameOriginRequest, verifyRecentTotp } from "@/lib/admin-auth";
+import { getAdminContext, isAdminDemoMode, isAdminSchemaReady, isSameOriginRequest } from "@/lib/admin-auth";
 import { getNextMonthlyPaymentDate } from "@/lib/payment-dates";
 import { getServiceSupabaseClient } from "@/lib/supabase-server";
 import { getWompiTransaction } from "@/lib/wompi-server";
@@ -11,7 +11,8 @@ import { billingRetrySchemaReady, retrySourceProof, verifiedBillingTransaction }
 
 const recoveryCommon = {
   reason: z.string().trim().min(5).max(500),
-  totpCode: z.string().regex(/^\d{6}$/),
+  // Ignored compatibility field; no new TOTP challenge is performed here.
+  totpCode: z.string().regex(/^\d{6}$/).optional(),
   requestId: z.string().uuid(),
   expectedVersion: z.number().int().min(0),
 };
@@ -92,11 +93,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   });
   if (rateError) return NextResponse.json({ message: "No fue posible validar el limite de seguridad." }, { status: 503 });
   if (rateAllowed !== true) return NextResponse.json({ message: "Demasiados intentos. Espera unos minutos." }, { status: 429 });
-  if (!(await verifyRecentTotp(input.totpCode))) {
-    return NextResponse.json({ message: "El codigo de Google Authenticator no es valido." }, { status: 403 });
-  }
-  const totpVerifiedAt = new Date().toISOString();
-
   const replayAdmin = await getAdminContext();
   if (!replayAdmin || replayAdmin.demo || replayAdmin.userId !== admin.userId) {
     return NextResponse.json({ message: "La sesion administrativa cambio o fue revocada." }, { status: 403 });
@@ -115,7 +111,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       p_expected_version: input.expectedVersion,
       p_actor_aal: replayAdmin.aal,
       p_actor_session_issued_at: replayAdmin.sessionIssuedAt,
-      p_totp_verified_at: totpVerifiedAt,
+      p_totp_verified_at: null,
     });
     if (error) return recoveryRpcError(error.message, true);
     const replay = recoveryReplaySchema.safeParse(data);
@@ -241,7 +237,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       p_actor_user_id: admin.userId,
       p_actor_aal: currentAdmin.aal,
       p_actor_session_issued_at: currentAdmin.sessionIssuedAt,
-      p_totp_verified_at: totpVerifiedAt,
+      p_totp_verified_at: null,
       p_expected_version: input.expectedVersion,
       p_reason: input.reason,
       p_request_id: input.requestId,

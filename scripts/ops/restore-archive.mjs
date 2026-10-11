@@ -52,7 +52,31 @@ async function runArchive(container, args, dump, password) {
 
 export function isSuccessfulRestoreExit(code, signal) { return code === 0 && !signal; }
 
-export async function restoreArchive({ container, dump, manifest, database, operator, password, postgresPassword, client }) {
+export async function streamRestoreLists(container, directory, remote, { execute = execFileSync } = {}) {
+  if (!/^hpe-(admin|backup)-lab-[a-z0-9-]+$/.test(container ?? "")
+    || !/^\/tmp\/hpe-restore-toc-[A-Za-z0-9]+$/.test(remote ?? "")) throw new Error("EXPLICIT_PRIVATE_TOC_TARGET_REQUIRED");
+  const files = await fs.readdir(directory);
+  if (!files.length || files.length > 64 || files.some((name) => !/^(regular|deferred|schemas|extension-\d+)\.list$/.test(name))) {
+    throw new Error("RESTORE_TOC_FILE_LIST_MISMATCH");
+  }
+  const contents = [];
+  for (const name of files) {
+    const file = path.join(directory, name);
+    const info = await fs.lstat(file);
+    if (!info.isFile() || info.isSymbolicLink() || info.size > 4 * 1024 * 1024) throw new Error("RESTORE_TOC_FILE_NOT_SAFE");
+    contents.push([name, await fs.readFile(file)]);
+  }
+  // Docker cp rejects a read-only root even when /tmp is a writable tmpfs.
+  execute("docker", ["exec", container, "mkdir", "-m", "700", remote], { windowsHide: true, stdio: "ignore" });
+  for (const [name, input] of contents) {
+    execute("docker", ["exec", "-i", container, "tee", `${remote}/${name}`],
+      { windowsHide: true, input, stdio: ["pipe", "ignore", "pipe"] });
+    execute("docker", ["exec", container, "chmod", "600", `${remote}/${name}`], { windowsHide: true, stdio: "ignore" });
+  }
+  return contents.length;
+}
+
+export async function restoreArchive({ container, dump, manifest, database, operator, password, postgresPassword, client, streamToc = false }) {
   const toc = await runArchive(container, ["--list"], dump, password);
   const lists = splitRestoreToc(toc, manifest.extensions);
   if (lists.ids.length && !manifest.eventTriggers?.some((trigger) => trigger.name === "ensure_rls"
@@ -69,7 +93,8 @@ export async function restoreArchive({ container, dump, manifest, database, oper
     await fs.writeFile(path.join(directory, `extension-${index}.list`), lists.extensionGroups[index].list, { flag: "wx", mode: 0o600 });
   }
   const remote = `/tmp/${path.basename(directory)}`;
-  execFileSync("docker", ["cp", directory, `${container}:${remote}`], { windowsHide: true });
+  if (streamToc) await streamRestoreLists(container, directory, remote);
+  else execFileSync("docker", ["cp", directory, `${container}:${remote}`], { windowsHide: true });
   await runArchive(container, ["--host=127.0.0.1", `--username=${operator}`, `--dbname=${database}`,
     "--exit-on-error", "--single-transaction", `--use-list=${remote}/schemas.list`], dump, password);
   const requiresOriginalOwner = lists.extensionGroups.some((group) => group.owner === "postgres");

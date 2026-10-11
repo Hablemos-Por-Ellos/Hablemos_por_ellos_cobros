@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { encryptBackup, decryptBackup } from "./backup-crypto.mjs";
 import { compareManifests, databaseManifest, quoteIdentifier } from "./database-manifest.mjs";
-import { splitRestoreToc, isSuccessfulRestoreExit } from "./restore-archive.mjs";
+import { splitRestoreToc, isSuccessfulRestoreExit, streamRestoreLists } from "./restore-archive.mjs";
 import { withOriginalExtensionInstaller } from "./extension-installer.mjs";
 import { isInsideRepository, assertExternalBackupOutput } from "./create-backup.mjs";
 import { applyPaymentMigration } from "./apply-payment-migration.mjs";
@@ -192,6 +192,34 @@ describe("private backup integrity", () => {
     expect(isSuccessfulRestoreExit(0, null)).toBe(true);
     expect(isSuccessfulRestoreExit(null, "SIGTERM")).toBe(false);
     expect(isSuccessfulRestoreExit(1, null)).toBe(false);
+  });
+  it("streams only generated TOC lists into a private read-only-root lab", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "hpe-toc-fixture-"));
+    await fs.writeFile(path.join(directory, "regular.list"), "fictional restore list");
+    const calls = [];
+    const execute = (command, args, options) => { calls.push({ command, args, options }); };
+    expect(await streamRestoreLists("hpe-backup-lab-fixture", directory, "/tmp/hpe-restore-toc-fixture", { execute })).toBe(1);
+    expect(calls.map(({ args }) => args)).toEqual([
+      ["exec", "hpe-backup-lab-fixture", "mkdir", "-m", "700", "/tmp/hpe-restore-toc-fixture"],
+      ["exec", "-i", "hpe-backup-lab-fixture", "tee", "/tmp/hpe-restore-toc-fixture/regular.list"],
+      ["exec", "hpe-backup-lab-fixture", "chmod", "600", "/tmp/hpe-restore-toc-fixture/regular.list"],
+    ]);
+    expect(calls[1].options.input.toString()).toBe("fictional restore list");
+    expect(calls[1].options.stdio[1]).toBe("ignore");
+  });
+  it.each(["/tmp/other", "/tmp/hpe-restore-toc-fixture/../outside"])("rejects an unexpected TOC target %s before execution", async (remote) => {
+    let calls = 0;
+    await expect(streamRestoreLists("hpe-backup-lab-fixture", "unused", remote, { execute: () => { calls++; } }))
+      .rejects.toThrow("EXPLICIT_PRIVATE_TOC_TARGET_REQUIRED");
+    expect(calls).toBe(0);
+  });
+  it("rejects unexpected files before sending any private restore data", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "hpe-toc-fixture-"));
+    await fs.writeFile(path.join(directory, "other.txt"), "fictional unrelated data");
+    let calls = 0;
+    await expect(streamRestoreLists("hpe-backup-lab-fixture", directory, "/tmp/hpe-restore-toc-fixture",
+      { execute: () => { calls++; } })).rejects.toThrow("RESTORE_TOC_FILE_LIST_MISMATCH");
+    expect(calls).toBe(0);
   });
   it.each(["role", "configuration"])("cleans up %s after SQL applies but the response is lost", async (failure) => {
     let setting = "pgcrypto";

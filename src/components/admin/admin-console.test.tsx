@@ -51,3 +51,32 @@ describe("partial logout privacy", () => {
     expect(screen.getByRole("link", { name: "Volver al ingreso" })).toHaveAttribute("href", "/admin/login");
   });
 });
+
+describe("reconciliation using the existing MFA session", () => {
+  it("requires a reason and confirmation but never requests or submits another TOTP", async () => {
+    const data = createAdminDemoState();
+    data.recoveryAttempts[0] = { ...data.recoveryAttempts[0], id: "a4200000-0000-4000-8000-000000000004" };
+    const attempt = data.recoveryAttempts[0];
+    const donor = data.donors.find((item) => item.id === attempt.donorId)!;
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ recovery: {
+      attemptId: attempt.id, transactionId: "fixture-transaction-042", result: "recovered",
+      providerStatus: "pending", state: "pending", needsReview: false,
+    } }) });
+    vi.stubGlobal("fetch",fetchMock);
+    render(<AdminConsole initialView="dashboard" initialData={data} demo={false} readOnly={false} adminEmail="fixture@example.test" />);
+    fireEvent.click(screen.getByRole("button",{name:`Conciliar transacción de ${donor.fullName}`}));
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.queryByLabelText(/Google Authenticator/)).not.toBeInTheDocument();
+    expect(dialog.getByRole("button",{name:"Verificar y conciliar"})).toBeDisabled();
+    fireEvent.change(dialog.getByLabelText("ID de transacción en Wompi"),{target:{value:"fixture-transaction-042"}});
+    fireEvent.change(dialog.getByLabelText("Motivo"),{target:{value:"Verified fictional transaction"}});
+    expect(dialog.getByRole("button",{name:"Verificar y conciliar"})).toBeEnabled();
+    fireEvent.click(dialog.getByRole("button",{name:"Verificar y conciliar"}));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(payload).toMatchObject({action:"reconcile",transactionId:"fixture-transaction-042",reason:"Verified fictional transaction"});
+    expect(payload).not.toHaveProperty("totpCode");
+    expect(await screen.findByText("Resultado confirmado: pending.")).toBeVisible();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});

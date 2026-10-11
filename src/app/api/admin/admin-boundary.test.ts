@@ -44,7 +44,7 @@ function request(path: string, method = "POST") {
   return new Request(`http://127.0.0.1:3000/api/admin/${path}`, { method,
     headers: { Origin: "http://127.0.0.1:3000", Host: "127.0.0.1:3000", "Content-Type": "application/json" },
     body: JSON.stringify({ action: path.startsWith("subscriptions") ? "amount" : "reconcile",
-      reason: "Fixture donor authorization", totpCode: "123456", expectedVersion: 3,
+      reason: "Fixture donor authorization", expectedVersion: 3,
       requestId: "30000000-0000-0000-0000-000000000001", amount: 31000, transactionId: "fixture-tx" }),
   });
 }
@@ -77,12 +77,12 @@ describe("direct APIs use the real authorization boundary", () => {
     expect(client.rpc).not.toHaveBeenCalledWith("billing_v2_admin_reconcile_payment_attempt", expect.anything());
     expect(mocks.source).not.toHaveBeenCalled();
   });
-  it.each(["admin", "super_admin"])("permits %s AAL2 with a fresh challenge and sends its verified context", async (role) => {
+  it.each(["admin", "super_admin"])("permits %s AAL2 without repeating the login challenge", async (role) => {
     const client = fixture({ role });
     const response = await PATCH(request(`subscriptions/${id}`, "PATCH"), { params: Promise.resolve({ id }) });
     expect(response.status).toBe(200);
-    expect(client.auth.mfa.challengeAndVerify).toHaveBeenCalled();
-    expect(client.rpc).toHaveBeenCalledWith("billing_v2_admin_update_subscription", expect.objectContaining({ p_actor_aal: "aal2", p_actor_session_issued_at: "2026-10-02T12:00:00.000Z", p_totp_verified_at: "2026-10-03T12:00:00.000Z" }));
+    expect(client.auth.mfa.challengeAndVerify).not.toHaveBeenCalled();
+    expect(client.rpc).toHaveBeenCalledWith("billing_v2_admin_update_subscription", expect.objectContaining({ p_actor_aal: "aal2", p_actor_session_issued_at: "2026-10-02T12:00:00.000Z", p_totp_verified_at: null }));
     expect(client.rpc).toHaveBeenCalledWith("billing_retry_schema_ready");
     expect(client.rpc).not.toHaveBeenCalledWith("admin_update_subscription", expect.anything());
   });

@@ -11,7 +11,7 @@ import { computeWompiEventChecksum, type WompiEventPayload } from '@/lib/wompi-w
 
 const providers = vi.hoisted(() => ({
   client: vi.fn(), acceptance: vi.fn(), source: vi.fn(), sourceAvailable: vi.fn(),
-  create: vi.fn(), get: vi.fn(), admin: vi.fn(), adminSchema: vi.fn(), totp: vi.fn(), sameOrigin: vi.fn(),
+  create: vi.fn(), get: vi.fn(), admin: vi.fn(), adminSchema: vi.fn(), sameOrigin: vi.fn(),
 }));
 vi.mock('@/lib/supabase-server', () => ({ getServiceSupabaseClient: providers.client }));
 vi.mock('@/lib/wompi', () => ({ WOMPI_ENV: 'sandbox', getWompiEventsSecret: () => 'test_events_ROUTE_FIXTURE_NOT_A_REAL_SECRET' }));
@@ -23,7 +23,7 @@ vi.mock('@/lib/wompi-server', () => ({
 }));
 vi.mock('@/lib/admin-auth', () => ({
   getAdminContext: providers.admin, isAdminSchemaReady: providers.adminSchema,
-  isAdminDemoMode: () => false, verifyRecentTotp: providers.totp,
+  isAdminDemoMode: () => false,
   isSameOriginRequest: providers.sameOrigin,
 }));
 
@@ -302,7 +302,7 @@ async function state(reference: string): Promise<FixtureState> {
 }
 async function recover(attempt: Row, transactionId: string, requestId: string) {
   return recoveryPost(request(`/api/admin/payment-attempts/${attempt.id}/reconcile`, {
-    action: 'reconcile', reason: 'Fictional route SQL verification', totpCode: '000000',
+    action: 'reconcile', reason: 'Fictional route SQL verification',
     requestId, transactionId, expectedVersion: 0,
   }), { params: Promise.resolve({ id: attempt.id as string }) });
 }
@@ -343,6 +343,9 @@ describe.skipIf(!enabled).sequential('v0.4.0 opted-in HTTP routes -> real Postgr
         'digest',(select digest from public.payment_admin_migrations where name='billing-retry-v0.4.0')) as data`);
       expect(result.rows[0].data).toEqual({ database: DATABASE, legacy: true, nonFixtureDonors: 0,
         nonFixtureUsers: 0, ready: true, digest: DIGEST });
+      const sessionMfa = await pg.query<{ ready: boolean }>(`select position('admin-session-mfa-v0.4.2'
+        in pg_get_functiondef('public.assert_admin_mutation_context(uuid,text,timestamptz,timestamptz)'::regprocedure)) > 0 as ready`);
+      expect(sessionMfa.rows[0].ready, 'LOCAL_ADMIN_SESSION_MFA_PATCH_REQUIRED').toBe(true);
     } finally { await pg.query('rollback'); }
     sourceHashes = await Promise.all(routePaths.map(fileDigest));
     donationPost = (await import('@/app/api/donations/route')).POST;
@@ -371,7 +374,6 @@ describe.skipIf(!enabled).sequential('v0.4.0 opted-in HTTP routes -> real Postgr
     providers.adminSchema.mockImplementation(async () => {
       const result = await adapter.rpc('payment_admin_schema_ready'); return !result.error && result.data === true;
     });
-    providers.totp.mockResolvedValue(true);
     providers.acceptance.mockResolvedValue({ acceptanceToken: 'fixture-acceptance', acceptPersonalAuth: 'fixture-personal-auth',
       acceptancePermalink: 'https://example.test/terms', personalDataAuthPermalink: 'https://example.test/privacy' });
     providers.source.mockImplementation(async ({ customerEmail }: { customerEmail: string }) => {

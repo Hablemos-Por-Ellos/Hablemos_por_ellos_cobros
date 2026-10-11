@@ -139,19 +139,19 @@ describe("safe retry confirmation", () => {
     expect(onMutate).not.toHaveBeenCalled();
   });
 
-  it("only cancels the prepared additional after reason, TOTP and explicit confirmation with the original reviewed cycle", async () => {
+  it("only cancels the prepared additional after reason and explicit confirmation with the original reviewed cycle", async () => {
     const { props, rerender, onMutate } = showDetail();
     fireEvent.click(screen.getByRole("button", { name: "Cancelar reintento" }));
     const dialog = within(screen.getByRole("dialog"));
     expect(dialog.getByRole("button", { name: "Confirmar cambio" })).toBeDisabled();
     fireEvent.change(dialog.getByLabelText("Motivo"), { target: { value: "Solicitud ficticia del donante" } });
-    fireEvent.change(dialog.getByLabelText("Código actual de Google Authenticator"), { target: { value: "123456" } });
+    expect(dialog.queryByLabelText("Código actual de Google Authenticator")).not.toBeInTheDocument();
     expect(onMutate).not.toHaveBeenCalled();
     expect(dialog.getByRole("heading", { name: "Antes" })).toBeInTheDocument();
     expect(dialog.getByRole("heading", { name: "Después" })).toBeInTheDocument();
     rerender(<DonorDetail {...props} data={{ ...props.data, billingCycles: props.data.billingCycles?.map((cycle) => cycle.id === "cycle-retry" ? { ...cycle, id: "cycle-new" } : cycle) }} />);
     await act(async () => fireEvent.click(dialog.getByRole("button", { name: "Confirmar cambio" })));
-    expect(onMutate).toHaveBeenCalledWith("sub-retry", 0, expect.objectContaining({ action: "cancel_retry", expectedCycleId: "cycle-retry", reason: "Solicitud ficticia del donante", totpCode: "123456" }));
+    expect(onMutate).toHaveBeenCalledWith("sub-retry", 0, expect.objectContaining({ action: "cancel_retry", expectedCycleId: "cycle-retry", reason: "Solicitud ficticia del donante" }));
   });
 
   it.each(["sub-julian", "sub-pending", "sub-elena", "sub-security", "sub-unico"])("does not offer another automatic or manual retry for %s", (id) => {

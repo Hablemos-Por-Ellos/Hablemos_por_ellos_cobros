@@ -422,11 +422,11 @@ describe("monthly donor controls remain available", () => {
     const dialog = within(screen.getByRole("dialog"));
     fireEvent.change(dialog.getByLabelText(/Nuevo monto mensual/), { target: { value: "31000" } });
     fireEvent.change(dialog.getByLabelText("Motivo"), { target: { value: "Autorizacion ficticia para prueba de frecuencia" } });
-    fireEvent.change(dialog.getByLabelText("C\u00f3digo actual de Google Authenticator"), { target: { value: "123456" } });
+    expect(dialog.queryByLabelText("C\u00f3digo actual de Google Authenticator")).not.toBeInTheDocument();
     expect(onMutate).not.toHaveBeenCalled();
     await user.click(dialog.getByRole("button", { name: "Confirmar cambio" }));
     expect(onMutate).toHaveBeenCalledTimes(1);
-    expect(onMutate).toHaveBeenCalledWith(subscription.id, subscription.billingVersion, expect.objectContaining({ action: "amount", amount: 31000, reason: "Autorizacion ficticia para prueba de frecuencia", totpCode: "123456" }));
+    expect(onMutate).toHaveBeenCalledWith(subscription.id, subscription.billingVersion, expect.objectContaining({ action: "amount", amount: 31000, reason: "Autorizacion ficticia para prueba de frecuencia" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

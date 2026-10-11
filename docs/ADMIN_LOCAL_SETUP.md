@@ -1,5 +1,40 @@
 # Panel administrativo: preparacion local
 
+## Ajuste local 0.4.2 - 2026-10-10
+
+El ultimo runtime verificado es 0.4.1/ece238d; codigo 0.4.2 aun sin publicacion.
+La unica funcion productiva se aplico y verifico tras FINAL restaurado/comparado,
+sin tablas ni filas modificadas. Ver `RELEASE_0.4.2.md`. Authenticator se mantiene al iniciar
+sesion; monto, agenda, cancelacion, reactivacion y conciliacion usan la sesion
+AAL2 existente, sin volver a pedir un codigo. Roles activos, revocacion, CSRF,
+motivo, confirmacion, versiones y auditoria se conservan.
+
+El laboratorio de Auth debe tener primero las migraciones base 0.3.0 y 0.4.0.
+El NUEVO parche `supabase/migrations/202610100001_admin_session_mfa.sql`
+reemplaza solo la funcion de contexto administrativo, sin tablas ni datos.
+`ESCRITURA LOCAL`: aplicarlo exclusivamente en el laboratorio ficticio antes
+de ejecutar `auth-real-e2e.mjs` o `admin-ui-local-e2e.mjs`; no repetir las
+migraciones anteriores en una base existente. Los ensayos exigen ese contrato.
+No utilizar `.env.local` productivo ni una restauracion privada como fixture.
+
+El ensayo independiente `admin-session-mfa-local-e2e.mjs` crea un contenedor
+temporal sin red, puertos o volumenes persistentes, compara 14 tablas y revierte
+las mutaciones de prueba. No requiere cambiar variables, cuentas ni llaves.
+Resultados y limites: `ADMIN_SESSION_MFA_0.4.2.md`. Las referencias a TOTP
+por accion en la historia siguiente describen la politica anterior, no 0.4.2.
+
+Integral nueva 0.4.2: `admin-session-auth-local-e2e.mjs` crea su propio GoTrue,
+PostgREST y DB ficticia sin volumen persistente, instala bases solo en esa DB
+vacia y aplica el parche sin cambiar filas. No reutiliza las restauraciones
+privadas ni el laboratorio persistente anterior. Auth/API/RLS: 66 comprobaciones;
+navegador: 210, con monto, fecha y cancelacion guardados sin otro TOTP.
+Cero pagos/intentos/ciclos. Retira sus tres contenedores/red al finalizar.
+La publicacion y funcion reales estan autorizadas tras respaldo FINAL verificado;
+la funcion esta aplicada/verificada y el despliegue del codigo sigue pendiente.
+No se autoriza despachar jobs o cargos de prueba.
+
+## Historia y laboratorio base
+
 **0.4.0 en Production/reabierta (2026-10-09):** registro compacto,
 filas moviles, historial y cancelacion confirmada del adicional. Codigo
 2769a11 READY y SQL nueva aplicada despues del FINAL restaurado/comparado,
@@ -112,9 +147,9 @@ el repositorio. Canal pendiente de confirmar; no enviar invitaciones todavia.
 Guardar abre el resumen Antes/Despues y la confirmacion. Volver, cerrar o Escape
 no guardan. Confirmar no genera un cobro ni modifica pagos anteriores.
 
-Los intentos `unknown` sin ID y los `dispatching` sin ID estancados durante 15 minutos se muestran en el resumen administrativo. Para conciliarlos, el administrador localiza la referencia en Wompi, ingresa el ID y confirma con TOTP. El servidor vuelve a consultar Wompi; el formulario no permite indicar el estado ni genera un cobro. El resultado y el responsable se guardan atomicamente en la auditoria.
+Los intentos `unknown` sin ID y los `dispatching` sin ID estancados durante 15 minutos se muestran en el resumen administrativo. Para conciliarlos, el administrador localiza la referencia en Wompi, ingresa el ID y confirma con su sesion AAL2 vigente; 0.4.2 no pide otro TOTP. El servidor vuelve a consultar Wompi; el formulario no permite indicar el estado ni genera un cobro. El resultado y el responsable se guardan atomicamente en la auditoria.
 
-Si Wompi confirma que no existe una transaccion, el admin puede cerrar el intento con motivo, TOTP y confirmacion explicita. El cierre marca el intento como `failed`, la suscripcion como `past_due` y no programa un reintento. No debe usarse esta opcion mientras la busqueda en Wompi sea dudosa.
+Si Wompi confirma que no existe una transaccion, el admin puede cerrar el intento con motivo, sesion AAL2 vigente y confirmacion explicita, sin otro TOTP en 0.4.2. El cierre marca el intento como `failed`, la suscripcion como `past_due` y no programa un reintento. No debe usarse esta opcion mientras la busqueda en Wompi sea dudosa.
 
 ## 4. Recuperacion
 

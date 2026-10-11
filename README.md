@@ -4,20 +4,43 @@ Mini-app de donaciones recurrentes para la Fundacion Hablemos por Ellos. La app 
 
 ## Estado actual
 
+- **0.4.2 probada; funcion productiva aplicada, publicacion pendiente, 2026-10-10.** Authenticator se pide
+  al iniciar sesion, no al confirmar cada guardado o conciliacion. Cada API
+  sigue comprobando sesion AAL2 vigente, rol activo, revocacion y CSRF; conserva
+  motivo, Antes/Despues, version, idempotencia, auditoria y barreras financieras.
+  El parche SQL reemplaza solo `assert_admin_mutation_context`, manteniendo
+  firma, propietario y permisos; no modifica tablas, indices ni datos.
+  Ensayo PostgreSQL ficticio: 14 tablas con definiciones y contenido identicos,
+  regresiones revertidas, cero cargos y contenedor temporal retirado.
+  1329 pruebas correctas, seis integrales opt-in omitidas; lint, TypeScript y
+  build aislado correctos. Revision visual local en escritorio, tablet y movil.
+  Integral real local: 66 comprobaciones Auth/API/RLS y 210 de navegador;
+  login con MFA, tres guardados UI sin TOTP adicional y cero pagos/intentos/ciclos.
+  El parche conserva contenido de 36 tablas del laboratorio GoTrue. Sin
+  credenciales productivas en tests ni peticiones externas desde el navegador.
+  FINAL privado restaurado/comparado: 51 tablas/501 filas, IDs, contenido, Auth,
+  esquema y permisos identicos; dos copias cifradas en D: y C: del mismo PC.
+  Tras confirmacion en chat, unica funcion aplicada a las 23:51:59 UTC;
+  cero cambios en tablas/filas/permisos y observador independiente correcto.
+  Respaldo posterior cifrado tambien conservado; este adicional aun no restaurado.
+  Rama `codex/admin-session-mfa`; codigo pendiente de commit/push/despliegue.
+  Ultima produccion verificada: 0.4.1/ece238d, con el control anterior.
+  Alcance, resultados y limites: `docs/ADMIN_SESSION_MFA_0.4.2.md`.
 - **0.4.1 publicada y verificada, 2026-10-10.** Parche de recuperacion de
   pagos enviados e inventario de calendarios incompatibles, sobre el esquema
   0.4.0 existente. No hay migracion nueva; un push no cambia agendas productivas.
   El titular opto por acordar dias estandar en lugar de ampliar calendarios
-  legacy; esos guardados auditados siguen pendientes del TOTP del titular.
+  legacy; el titular ya guardo ambos calendarios y la UI mostro version1.
   Runtime e2f6baa y checkpoint documental 10f27f0 publicados por rama/dev/main;
   login/donar/acceptance 200 y admin anonimo 307 a login. Sin cambiar llaves,
   variables ni workflows; sin ejecutar cargos de prueba.
   1322 pruebas, lint, TypeScript y build aislado correctos; QA aprueba local.
-  Inventory 38089969318 observo dos calendarios pendientes de MFA/guardado:
-  calendarReviewRequired=2, failed=0, sent=0 y charged=0. Su salida de error
-  es una advertencia esperada, no una certificacion de que esas fechas se arreglaron.
+  Inventory anterior 38089969318 observo dos calendarios pendientes. Despues
+  de los guardados, inventory 38091149166 sobre main/ece238d paso con
+  calendarReviewRequired=0, failed=0, sent=0 y charged=0. No se enviaron cargos
+  de prueba; esta lectura no garantiza aprobaciones bancarias futuras.
   Alcance: `docs/BILLING_RECOVERY_0.4.1.md`; pruebas: `docs/VALIDATION_0.4.1.md`;
-  comprobacion de despliegue y agendas pendientes: `docs/RELEASE_0.4.1.md`.
+  comprobacion de despliegue y cierre documental: `docs/RELEASE_0.4.1.md`.
 - **0.4.0 publicada, migrada y reabierta, 2026-10-09 Colombia.** Codigo
   `2769a11` promovido por rama/dev/main; Preview ficticia y Production READY.
   Admin compacto y un adicional por ciclo tras fondos insuficientes verificados,
@@ -511,10 +534,12 @@ El endpoint valida la firma del evento con `WOMPI_EVENTS_SECRET_PROD` y guarda u
 
 La obtencion de contratos/tokens usa `GET /merchants/info` con `x-merchant-public-key`; no usa el endpoint de Wompi que se retira el 31 de octubre de 2026.
 
-## Panel administrativo
+## Referencia Admin 0.3.0
 
-Esta seccion describe el paquete local `0.3.0`, todavia no habilitado en
-produccion. No usar la maqueta para administrar personas reales.
+Esta seccion describe historicamente el paquete `0.3.0`, no la politica
+actual. Para Authenticator solo al login y sus pruebas 0.4.2, ver
+`docs/ADMIN_SESSION_MFA_0.4.2.md`; para publicacion, `docs/RELEASE_0.4.2.md`.
+No usar ninguna maqueta/demo para administrar personas reales.
 
 El panel se encuentra en `/admin` y requiere correo, contrasena, una cuenta allowlist y TOTP/AAL2. No ofrece registro publico. Los datos personales son de solo lectura; el admin puede cambiar el monto del siguiente cobro, cambiar dia/mes, cancelar o reactivar una suscripcion. La reactivacion exige confirmar que el donante la autorizo, registra esa atestacion en la auditoria y no genera un cargo inmediato. Cada mutacion exige motivo, un codigo TOTP actual, control de version y auditoria. La RPC de escritura no esta disponible para `anon` ni `authenticated`: solo la API del servidor puede invocarla con `service_role` y registra el UUID de la sesion administrativa ya validada.
 

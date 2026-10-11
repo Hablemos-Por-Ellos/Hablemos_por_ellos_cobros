@@ -102,23 +102,6 @@ export async function requireAdminPage() {
   return context;
 }
 
-export async function verifyRecentTotp(code: string) {
-  if (isAdminDemoMode()) return false;
-  if (!/^\d{6}$/.test(code)) return false;
-  if (!(await getAdminContext())) return false;
-
-  const supabase = await getServerAuthSupabaseClient();
-  if (!supabase) return false;
-
-  const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
-  if (factorsError || !factors) return false;
-  const factor = factors.totp.find((item) => item.status === "verified");
-  if (!factor) return false;
-
-  const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
-  return !error && !!(await getAdminContext());
-}
-
 export function isSameOriginRequest(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin) return false;

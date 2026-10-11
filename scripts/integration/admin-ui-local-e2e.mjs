@@ -16,6 +16,9 @@ let browser;
 let unexpectedBrowserRequests = 0;
 let privilegedBrowserRequests = 0;
 let privilegedBundleMatches = 0;
+let browserMfaChallenges = 0;
+let loginMfaChallenges = 0;
+let mutationRequestsWithTotp = 0;
 const pendingBundles = [];
 const mutations = process.argv.includes('--mutations=yes');
 const check = (condition, name) => { assert.ok(condition, name); checks++; };
@@ -110,7 +113,12 @@ try {
 
   stage = 'browser';
   const { chromium } = require(modulePath);
-  browser = await chromium.launch({ channel: 'msedge', headless: true });
+  stage = 'browser-launch';
+  const executablePath = process.env.HPE_PLAYWRIGHT_EXECUTABLE;
+  if (executablePath) await fs.access(executablePath);
+  browser = await chromium.launch({ channel: process.argv.includes('--browser=chromium') ? undefined : 'msedge',
+    ...(executablePath ? { executablePath } : {}), headless: true });
+  stage = 'browser-context';
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   let firstBootstrapObserved = false;
   let bootstrapObservation;
@@ -125,6 +133,10 @@ try {
     if (request.headers().apikey === config.serviceKey) {
       privilegedBrowserRequests++;
       return route.abort();
+    }
+    if (/\/factors\/[^/]+\/challenge$/.test(url.pathname)) browserMfaChallenges++;
+    if (url.pathname.startsWith('/api/admin/subscriptions/') && request.method() === 'PATCH') {
+      if (Object.hasOwn(request.postDataJSON() ?? {}, 'totpCode')) mutationRequestsWithTotp++;
     }
     if (url.pathname === '/api/admin/bootstrap' && !firstBootstrapObserved) {
       firstBootstrapObserved = true;
@@ -146,6 +158,7 @@ try {
     }
     return route.continue();
   });
+  stage = 'browser-page';
   const page = await context.newPage();
   page.on('response', (response) => {
     if (response.url().includes('/_next/') && response.url().split('?')[0].endsWith('.js')) {
@@ -198,6 +211,8 @@ try {
   const authenticated = sessionClient(config, authenticatedCookies);
   check((await authenticated.auth.getUser()).data.user?.id === userId, 'UI_COOKIE_IDENTITY_MATCHES_FIXTURE');
   check((await authenticated.auth.mfa.getAuthenticatorAssuranceLevel()).data?.currentLevel === 'aal2', 'UI_COOKIE_IS_AAL2');
+  loginMfaChallenges = browserMfaChallenges;
+  check(loginMfaChallenges > 0, 'BROWSER_AUTHENTICATOR_LOGIN_WAS_CHALLENGED');
   const blockedSource = await authenticated.from('subscriptions').select('wompi_payment_source_id');
   check(!!blockedSource.error, 'UI_SESSION_CANNOT_READ_PAYMENT_SOURCES');
   check(await page.evaluate(() => localStorage.length === 0), 'REAL_PANEL_STORES_NO_LOCALSTORAGE_DATA');
@@ -230,10 +245,9 @@ try {
     await dialog.getByLabel('Nuevo monto mensual').fill('1600');
     await dialog.getByLabel('Motivo', { exact: true }).fill('Fictitious browser amount change');
     check(await dialog.getByLabel('Codigo actual de Google Authenticator', { exact: true }).count() === 0,
-      'UNACCENTED_TOTP_SELECTOR_IS_NOT_THE_FIELD');
-    check(await dialog.getByLabel('C\u00f3digo actual de Google Authenticator', { exact: true }).count() === 1,
-      'EXACT_TOTP_FIELD_FOUND');
-    await dialog.getByLabel('C\u00f3digo actual de Google Authenticator', { exact: true }).fill(await nextCode(secret));
+      'AMOUNT_HAS_NO_UNACCENTED_ACTION_TOTP');
+    check(await dialog.getByLabel('C\u00f3digo actual de Google Authenticator', { exact: true }).count() === 0,
+      'AMOUNT_USES_LOGIN_MFA_SESSION');
     let responsePromise = page.waitForResponse((response) => response.url().endsWith(`/api/admin/subscriptions/${subscriptionId}`)
       && response.request().method() === 'PATCH');
     stage = 'amount-ui-save';
@@ -253,7 +267,7 @@ try {
     await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
     dialog = page.getByRole('dialog');
     await dialog.getByLabel('Motivo', { exact: true }).fill('Fictitious browser skip-month change');
-    await dialog.getByLabel('C\u00f3digo actual de Google Authenticator', { exact: true }).fill(await nextCode(secret));
+    check(await dialog.getByLabel(/Google Authenticator/).count() === 0, 'SCHEDULE_USES_LOGIN_MFA_SESSION');
     responsePromise = page.waitForResponse((response) => response.url().endsWith(`/api/admin/subscriptions/${subscriptionId}`)
       && response.request().method() === 'PATCH');
     await dialog.getByRole('button', { name: 'Confirmar cambio', exact: true }).click();
@@ -267,7 +281,7 @@ try {
     await page.getByRole('button', { name: 'Cancelar suscripción', exact: true }).click();
     dialog = page.getByRole('dialog');
     await dialog.getByLabel('Motivo', { exact: true }).fill('Fictitious browser cancellation');
-    await dialog.getByLabel('C\u00f3digo actual de Google Authenticator', { exact: true }).fill(await nextCode(secret));
+    check(await dialog.getByLabel(/Google Authenticator/).count() === 0, 'CANCELLATION_USES_LOGIN_MFA_SESSION');
     responsePromise = page.waitForResponse((response) => response.url().endsWith(`/api/admin/subscriptions/${subscriptionId}`)
       && response.request().method() === 'PATCH');
     await dialog.getByRole('button', { name: 'Confirmar cambio', exact: true }).click();
@@ -277,9 +291,12 @@ try {
     check(stored.status === 'cancelled' && stored.billing_version === 3 && stored.next_payment_date === null
       && !!stored.cancelled_at, 'UI_CANCELLATION_STOPS_NEXT_CHARGES');
     const counts = (await database.query(`select (select count(*)::integer from public.admin_audit_logs where subscription_id=$1
-      and actor_user_id=$2) as audit, (select count(*)::integer from public.payments where subscription_id=$1) as payments`,
+      and actor_user_id=$2) as audit, (select count(*)::integer from public.payments where subscription_id=$1) as payments,
+      (select bool_and(actor_aal='aal2' and totp_verified_at is null) from public.admin_audit_logs
+        where subscription_id=$1 and actor_user_id=$2) as "sessionOnlyAudit"`,
     [subscriptionId, userId])).rows[0];
-    check(counts.audit === 3 && counts.payments === 0, 'UI_CHANGES_AUDITED_WITHOUT_ANY_PAYMENT');
+    check(counts.audit === 3 && counts.payments === 0 && counts.sessionOnlyAudit, 'UI_CHANGES_AUDITED_WITHOUT_ANY_PAYMENT');
+    check(browserMfaChallenges === loginMfaChallenges && mutationRequestsWithTotp === 0, 'NO_MFA_RECHALLENGE_OR_CODE_DURING_THREE_SAVES');
   }
 
   stage = 'logout';
@@ -326,10 +343,13 @@ try {
     observedTables: baseline.size, beforeRows: beforeCount, afterRows: afterCount,
     originalRowsPreserved: true, fixtureRecordsRetained: true, screenshots: 0, traces: 0,
     observedNonlocalBrowserRequests: unexpectedBrowserRequests, privilegedBrowserRequests,
-    privilegedBundleMatches }));
+    privilegedBundleMatches, loginMfaChallenges,
+    actionMfaChallenges: browserMfaChallenges - loginMfaChallenges, mutationRequestsWithTotp }));
 } catch (error) {
   console.error(JSON.stringify({ operation: 'admin_ui_local_e2e', passed: false, stage, checks,
     assertion: /^[A-Z0-9_]+$/.test(error.message ?? '') ? error.message : undefined,
+    browserDiagnostic: stage.startsWith('browser-') ? String(error.message).split('\n')[0]
+      .replace(/eyJ[A-Za-z0-9._-]+/g, '[fixture-token]').slice(0, 240) : undefined,
     failure: error.name }));
   process.exitCode = 1;
 } finally {

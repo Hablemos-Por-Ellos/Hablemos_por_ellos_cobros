@@ -42,7 +42,6 @@ function validMutation(overrides: Record<string, unknown> = {}) {
   return {
     action: "amount",
     reason: "Solicitud confirmada por el donante",
-    totpCode: "123456",
     expectedVersion: 3,
     requestId: "30000000-0000-0000-0000-000000000001",
     amount: 30000,
@@ -164,10 +163,11 @@ describe("PATCH /api/admin/subscriptions/[id]", () => {
     expect(response.status).toBe(401);
   });
 
-  it("does not mutate when the fresh TOTP challenge fails", async () => {
+  it("does not mutate if the session is revoked during the final recheck", async () => {
     const client = serviceClient();
     mocks.getServiceSupabaseClient.mockReturnValue(client);
-    mocks.verifyRecentTotp.mockResolvedValue(false);
+    mocks.getAdminContext.mockResolvedValueOnce({ userId: adminId, demo: false,
+      aal: "aal2", sessionIssuedAt: "2026-10-01T00:00:00Z" }).mockResolvedValueOnce(null);
 
     const response = await PATCH(request(validMutation()), { params: Promise.resolve({ id: subscriptionId }) });
 
@@ -191,7 +191,7 @@ describe("PATCH /api/admin/subscriptions/[id]", () => {
       p_amount: 30000,
       p_actor_aal: "aal2",
       p_actor_session_issued_at: "2026-10-01T00:00:00Z",
-      p_totp_verified_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      p_totp_verified_at: null,
     }));
     const call = client.rpc.mock.calls.find(([name]) => name === "billing_v2_admin_update_subscription")!;
     expect(Object.keys(call[1]).sort()).toEqual([
@@ -199,6 +199,25 @@ describe("PATCH /api/admin/subscriptions/[id]", () => {
       "p_amount", "p_preferred_payment_day", "p_next_payment_date", "p_donor_authorization_confirmed",
       "p_actor_aal", "p_actor_session_issued_at", "p_totp_verified_at", "p_expected_cycle_id",
     ].sort());
+  });
+
+  it("ignores an older client's TOTP and body identity instead of inventing a new verification", async () => {
+    const client = serviceClient();
+    mocks.getServiceSupabaseClient.mockReturnValue(client);
+    const response = await PATCH(request(validMutation({ totpCode: "123456",
+      actorUserId: "10000000-0000-0000-0000-000000000099", aal: "aal2",
+      totpVerifiedAt: "2040-01-01T00:00:00Z" })), { params: Promise.resolve({ id: subscriptionId }) });
+    expect(response.status).toBe(200);
+    expect(client.rpc).toHaveBeenCalledWith("billing_v2_admin_update_subscription",
+      expect.objectContaining({ p_actor_user_id: adminId, p_totp_verified_at: null }));
+    expect(mocks.verifyRecentTotp).not.toHaveBeenCalled();
+  });
+
+  it("still rejects a valid old-client TOTP when there is no verified session", async () => {
+    mocks.getAdminContext.mockResolvedValue(null);
+    const response = await PATCH(request(validMutation({ totpCode: "123456" })), { params: Promise.resolve({ id: subscriptionId }) });
+    expect(response.status).toBe(401);
+    expect(mocks.getServiceSupabaseClient).not.toHaveBeenCalled();
   });
 
   describe.each([null, "source-1"])("one_time contribution with fixture source %s", (sourceId) => {
@@ -356,7 +375,7 @@ describe("PATCH /api/admin/subscriptions/[id]", () => {
     const replay = await PATCH(request({ ...mutation, totpCode: "654321" }), { params: Promise.resolve({ id: subscriptionId }) });
     expect(replay.status).toBe(200);
     expect(await replay.json()).toEqual(confirmed);
-    expect(mocks.verifyRecentTotp).toHaveBeenCalledWith("654321");
+    expect(mocks.verifyRecentTotp).not.toHaveBeenCalled();
     expect(client.from).not.toHaveBeenCalled();
     expect(mocks.isWompiPaymentSourceAvailable).not.toHaveBeenCalled();
     expect(client.rpc.mock.calls.filter(([name]) => name === "billing_v2_admin_update_subscription")).toHaveLength(1);
@@ -384,12 +403,13 @@ describe("PATCH /api/admin/subscriptions/[id]", () => {
     expect(client.committed.size).toBe(1);
   });
 
-  it("does not return a cached mutation when the new TOTP challenge fails", async () => {
+  it("does not return a cached mutation when the AAL2 session is revoked", async () => {
     const client = serviceClient();
     mocks.getServiceSupabaseClient.mockReturnValue(client);
     expect((await PATCH(request(validMutation()), { params: Promise.resolve({ id: subscriptionId }) })).status).toBe(200);
     client.rpc.mockClear();
-    mocks.verifyRecentTotp.mockResolvedValue(false);
+    mocks.getAdminContext.mockResolvedValueOnce({ userId: adminId, demo: false,
+      aal: "aal2", sessionIssuedAt: "2026-10-01T00:00:00Z" }).mockResolvedValueOnce(null);
     const replay = await PATCH(request(validMutation()), { params: Promise.resolve({ id: subscriptionId }) });
     expect(replay.status).toBe(403);
     expect(client.rpc).not.toHaveBeenCalledWith("billing_v2_admin_update_subscription", expect.anything());
